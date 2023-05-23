@@ -916,7 +916,7 @@ class Bundle(ParameterSet):
             # call set_hierarchy to force mass constraints to be rebuilt
             b.set_hierarchy()
 
-        if phoebe_version_import < StrictVersion("2.4.0") or ".dev" in version:
+        if phoebe_version_import < StrictVersion("2.4.0"):
             warning = "importing from an older version ({}) of PHOEBE to PHOEBE 2.4.  This may take some time.  Please check all values.".format(phoebe_version_import)
             logger.warning(warning)
 
@@ -993,6 +993,20 @@ class Bundle(ParameterSet):
                 if solved_for.qualifier != constraint.constraint_func:
                     new_constraint.flip_for(solved_for.twig)
 
+        if phoebe_version_import < StrictVersion("2.5.0") or ".dev" in version:
+            warning = "importing from an older version ({}) of PHOEBE to PHOEBE 2.5.  This may take some time.  Please check all values.".format(phoebe_version_import)
+            logger.warning(warning)
+
+            # update all lc datasets to get new boosting parameters
+            # all datasets need to be rebuilt to handle compute_phases_t0 -> phases_t0
+            # and add mask_phases and solver_times support
+            for dataset in b.filter(context='dataset', kind='lc').datasets:
+                logger.info("attempting to update dataset='{}' to new version requirements".format(dataset))
+                ps_ds = b.filter(context='dataset', dataset=dataset, **_skip_filter_checks)
+                ds_kind = ps_ds.kind
+                dict_ds = _ps_dict(ps_ds, include_constrained=False)
+                b.remove_dataset(dataset, context=['dataset', 'constraint'])
+                b.add_dataset(ds_kind, dataset=dataset, check_label=False, **dict_ds)
 
         if conf_interactive_checks:
             logger.debug("re-enabling interactive_checks")
@@ -1000,8 +1014,6 @@ class Bundle(ParameterSet):
 
         b.run_all_constraints()
         return b
-
-
 
     @classmethod
     def from_server(cls, bundleid, server='http://localhost:5555',
