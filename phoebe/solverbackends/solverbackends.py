@@ -51,6 +51,13 @@ except ImportError:
 else:
     _use_dynesty = True
 
+try:
+    import ultranest
+except ImportError:
+    _use_ultranest = False
+else:
+    _use_ultranest = True
+
 from tqdm import tqdm as _tqdm
 
 try:
@@ -2006,6 +2013,279 @@ class DynestyBackend(BaseSolverBackend):
         return
 
 
+class UltraNestBackend(BaseSolverBackend):
+    """
+    See <phoebe.parameters.solver.sampler.ultranest>.
+
+    The run method in this class will almost always be called through the bundle, using
+    * <phoebe.frontend.bundle.Bundle.add_solver>
+    * <phoebe.frontend.bundle.Bundle.run_solver>
+    """
+    @property
+    def workers_need_solution_ps(self):
+        return True
+
+    def run_checks(self, b, solver, compute, **kwargs):
+        # check whether emcee is installed
+
+        if not _use_ultranest:
+            raise ImportError("could not import ultranest.  Install (pip install ultranest) and restart phoebe.")
+
+        solver_ps = b.get_solver(solver=solver, **_skip_filter_checks)
+        if not len(solver_ps.get_value(qualifier='priors', init_from=kwargs.get('priors', None))):
+            raise ValueError("cannot run ultranest without any distributions in priors")
+
+    def _get_packet_and_solution(self, b, solver, **kwargs):
+        # NOTE: b, solver, compute, backend will be added by get_packet_and_solution
+
+        solution_params = []
+        solution_params += [_parameters.DictParameter(qualifier='wrap_central_values', value={}, advanced=True, readonly=True, description='Central values adopted for all parameters in init_from that allow angle-wrapping.  Sampled values are not allowed beyond +/- pi of the central value.')]
+        solution_params += [_parameters.ArrayParameter(qualifier='fitted_uniqueids', visible_if='false', value=[], advanced=True, readonly=True, description='uniqueids of parameters fitted by the sampler')]
+        solution_params += [_parameters.ArrayParameter(qualifier='fitted_twigs', value=[], readonly=True, description='twigs of parameters fitted by the sampler')]
+        solution_params += [_parameters.ArrayParameter(qualifier='fitted_units', value=[], advanced=True, readonly=True, description='units of parameters fitted by the sampler')]
+        solution_params += [_parameters.SelectTwigParameter(qualifier='adopt_parameters', value=[], description='which of the parameters should be included when adopting (and plotting) the solution')]
+        solution_params += [_parameters.BoolParameter(qualifier='adopt_distributions', value=True, description='whether to create a distribution (of all parameters in adopt_parameters according to distributions_convert)  when calling adopt_solution.')]
+        solution_params += [_parameters.ChoiceParameter(qualifier='distributions_convert', value='mvsamples', choices=['mvsamples', 'mvhistogram', 'mvgaussian', 'samples', 'histogram', 'gaussian'], description='type of distribution to use when calling adopt_solution, get_distribution_collection, or plot. mvsamples: chains are stored directly and used for sampling with a KDE generated on-the-fly to compute probabilities.  mvhistogram: chains are binned according to distributions_bins and stored as an n-dimensional histogram.  mvgaussian: a multivariate gaussian is fitted to the samples, use only if distribution is sufficiently represented by gaussians.  samples: a univariate representation of mvsamples.  histogram: a univariate representation of mvhistogram.  gaussian: a univariate representation of mvgaussian.')]
+        solution_params += [_parameters.IntParameter(visible_if='distributions_convert:mvhistogram|histogram', qualifier='distributions_bins', value=20, limits=(5,1000), description='number of bins to use for the distribution when calling adopt_solution, get_distribution_collection, or plot.')]
+        solution_params += [_parameters.BoolParameter(qualifier='adopt_values', value=True, description='whether to update the parameter face-values (of the means of all parameters in adopt_parameters) when calling adopt_solution.')]
+
+        ## THE FOLLOWING BLOCK SHOULD BE ADJUSTED FOR THE INFORMATION RETURNED FROM DYNESTY THAT 
+        # SHOULD BE STORED IN THE SOLUTION - EITHER TO EXPOSE TO THE USER OR TO USE TO CREATE
+        # DISTRIBUTIONS, ETC
+        solution_params += [_parameters.IntParameter(qualifier='nlive', value=0, readonly=True, description='')]
+        solution_params += [_parameters.IntParameter(qualifier='niter', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='ncall', value=0, readonly=True, description='')]
+        solution_params += [_parameters.IntParameter(qualifier='eff', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='samples', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='samples_id', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='samples_it', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='samples_u', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='logwt', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='logl', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='logvol', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='logz', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='logzerr', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='information', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='bound_iter', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='samples_bound', value=0, readonly=True, description='')]
+        solution_params += [_parameters.ArrayParameter(qualifier='scale', value=0, readonly=True, description='')]
+
+        solution_params += [_parameters.FloatParameter(qualifier='progress', value=0, limits=(0,100), default_unit=u.dimensionless_unscaled, advanced=True, readonly=True, description='percentage of requested iterations completed')]
+
+        if kwargs.get('expose_failed', True):
+            solution_params += [_parameters.DictParameter(qualifier='failed_samples', value={}, readonly=True, description='Samples that returned lnprobability=-inf.  Dictionary keys are the messages with values being an array with shape (N, len(fitted_twigs))')]
+
+        return kwargs, _parameters.ParameterSet(solution_params)
+
+    def _run_worker(self, packet):
+        # here we'll override loading the bundle since it is not needed
+        # in run_worker (for the workers.... note that the master
+        # will enter run_worker through run, not here)
+        return self.run_worker(**packet)
+
+    def run_worker(self, b, solver, compute, **kwargs):
+
+        def _get_packetlist(results, progress):
+            # THIS NEEDS TO MATCH THE LIST OF PARAMETERS DEFINED ABOVE AND JUST SETS
+            # THE PARAMETERS TO THE CURRENT VALUES
+            return_ = [{'qualifier': 'wrap_central_values', 'value': wrap_central_values},
+                     {'qualifier': 'fitted_uniqueids', 'value': params_uniqueids},
+                     {'qualifier': 'fitted_twigs', 'value': params_twigs},
+                     {'qualifier': 'fitted_units', 'value': params_units},
+                     {'qualifier': 'adopt_parameters', 'value': params_twigs, 'choices': params_twigs},
+                     {'qualifier': 'nlive', 'value': results.nlive},
+                     {'qualifier': 'niter', 'value': results.niter},
+                     {'qualifier': 'ncall', 'value': results.ncall},
+                     {'qualifier': 'eff', 'value': results.eff},
+                     {'qualifier': 'samples', 'value': results.samples},
+                     {'qualifier': 'samples_id', 'value': results.samples_id},
+                     {'qualifier': 'samples_it', 'value': results.samples_it},
+                     {'qualifier': 'samples_u', 'value': results.samples_u},
+                     {'qualifier': 'logwt', 'value': results.logwt},
+                     {'qualifier': 'logl', 'value': results.logl},
+                     {'qualifier': 'logvol', 'value': results.logvol},
+                     {'qualifier': 'logz', 'value': results.logz},
+                     {'qualifier': 'logzerr', 'value': results.logzerr},
+                     {'qualifier': 'information', 'value': results.information},
+                     {'qualifier': 'bound_iter', 'value': results.bound_iter},
+                     {'qualifier': 'samples_bound', 'value': results.samples_bound},
+                     {'qualifier': 'scale', 'value': results.scale},
+                     {'qualifier': 'progress', 'value': progress}
+                    ]
+
+            if expose_failed:
+                failed_samples = {}
+                if expose_failed:
+                    for msg, fsamples in failed_samples_buffer:
+                        failed_samples[msg] = failed_samples.get(msg, []) + [fsamples]
+
+                return_ += [{'qualifier': 'failed_samples', 'value': failed_samples}]
+
+            return [return_]
+
+        within_mpirun = mpi.within_mpirun
+        mpi_enabled = mpi.enabled
+
+        # ultranest handles workers itself.  So here we'll just take the workers
+        # from our own waiting loop in phoebe's __init__.py and subscribe them
+        # to ultranest's pool.
+        if mpi.within_mpirun:
+            logger.info("ultranest: using MPI pool")
+
+            global failed_samples_buffer
+            failed_samples_buffer = []
+
+            global _MPI
+            from mpi4py import MPI as _MPI # needed for the cost-function to send failed samples
+
+            def mpi_failed_samples_callback(result):
+                global failed_samples_buffer
+                if isinstance(result, tuple):
+                    failed_samples_buffer.append(result)
+                    return False
+                else:
+                    return True
+
+            pool = _pool.MPIPool(callback=mpi_failed_samples_callback)
+            is_master = pool.is_master()
+
+            # temporarily disable MPI within run_compute to disabled parallelizing
+            # per-time.
+            mpi._within_mpirun = False
+            mpi._enabled = False
+
+        elif conf.multiprocessing_nprocs==0:
+            logger.info("dynesty: using serial mode")
+
+            pool = _pool.SerialPool()
+            failed_samples_buffer = []
+            is_master = True
+
+        else:
+            logger.info("dynesty: using multiprocessing pool with {} procs".format(conf.multiprocessing_nprocs))
+
+            pool = _pool.MultiPool(processes=conf._multiprocessing_nprocs)
+            failed_samples_buffer = multiprocessing.Manager().list()
+            is_master = True
+
+        if is_master:
+            priors = kwargs.get('priors')
+            priors_combine = kwargs.get('priors_combine')
+
+            maxiter = kwargs.get('maxiter')
+            progress_every_niters = kwargs.get('progress_every_niters')
+            expose_failed = kwargs.get('expose_failed')
+
+            solution_ps = kwargs.get('solution_ps')
+            solution = kwargs.get('solution')
+            metawargs = {'context': 'solution',
+                         'solver': solver,
+                         'compute': compute,
+                         'kind': 'dynesty',
+                         'solution': solution}
+
+            # NOTE: here it is important that _sample_ppf sees the parameters in the
+            # same order as _lnprobability (that is in the order of params_uniqueids)
+            priors_dc, params_uniqueids = b.get_distribution_collection(distribution=priors,
+                                                                        combine=priors_combine,
+                                                                        include_constrained=False,
+                                                                        keys='uniqueid',
+                                                                        within_parameter_limits=True,
+                                                                        set_labels=False)
+
+            wrap_central_values = _wrap_central_values(b, priors_dc, params_uniqueids)
+
+            params_units = [dist.unit.to_string() for dist in priors_dc.dists]
+
+            params_uniqueids_and_indices = [_extract_index_from_string(uid) for uid in params_uniqueids]
+            params_twigs = [_to_twig_with_index(b.get_parameter(uniqueid=uniqueid, **_skip_filter_checks).twig, index) for uniqueid, index in params_uniqueids_and_indices]
+
+            # NOTE: in dynesty we draw from the priors and pass the prior-transforms,
+            # but do NOT include the lnprior term in lnlikelihood, so we pass
+            # priors as []
+            lnlikelihood_kwargs = {'b': _bsolver(b, solver, compute, [], wrap_central_values),
+                                   'params_uniqueids': params_uniqueids,
+                                   'compute': compute,
+                                   'priors': [],
+                                   'priors_combine': 'and',
+                                   'solution': kwargs.get('solution', None),
+                                   'compute_kwargs': {k:v for k,v in kwargs.items() if k in b.get_compute(compute=compute, **_skip_filter_checks).qualifiers},
+                                   'custom_lnprobability_callable': kwargs.pop('custom_lnprobability_callable', None),
+                                   'failed_samples_buffer': False if not expose_failed else failed_samples_buffer}
+
+
+
+
+            logger.debug("dynesty.NestedSampler(_lnprobability, _sample_ppf, log_kwargs, ptform_kwargs, ndim, nlive)")
+            sampler = dynesty.NestedSampler(_lnprobability, _sample_ppf,
+                                        logl_kwargs=lnlikelihood_kwargs, ptform_kwargs={'distributions_list': priors_dc.dists},
+                                        ndim=len(params_uniqueids), nlive=int(kwargs.get('nlive')), pool=pool)
+
+            sargs = {}
+            sargs['maxiter'] = maxiter
+            sargs['maxcall'] = kwargs.get('maxcall')
+
+            # TODO: expose these via parameters?
+            sargs['dlogz'] = kwargs.get('dlogz', 0.01)
+            sargs['logl_max'] = kwargs.get('logl_max', np.inf)
+            sargs['n_effective'] = kwargs.get('n_effective',np.inf)
+            sargs['add_live'] = kwargs.get('add_live', True)
+            # sargs['save_bounds'] = kwargs.get('save_bounds', True)
+            # sargs['save_samples'] = kwargs.get('save_samples', True)
+
+
+            sampler.run_nested(**sargs)
+            for iter,result in enumerate(sampler.sample(**sargs)):
+                # check for kill signal
+                if kwargs.get('out_fname', False) and os.path.isfile(kwargs.get('out_fname')+'.kill'):
+                    logger.warning("received kill signal, exiting sampler loop")
+                    break
+
+                progress = float(iter) / maxiter * 100
+
+                if progress_every_niters == 0 and 'out_fname' in kwargs.keys():
+                    fname = kwargs.get('out_fname') + '.progress'
+                    f = open(fname, 'w')
+                    f.write(str(progress))
+                    f.close()
+
+
+                if (progress_every_niters > 0 and (iter == 0 or iter % progress_every_niters == 0)) or iter == maxiter:
+                    logger.info("dynesty: saving output from iteration {}".format(iter))
+
+                    solution_ps = self._fill_solution(solution_ps, [_get_packetlist(sampler.results, progress)], metawargs)
+
+                    if 'out_fname' in kwargs.keys():
+                        if iter == maxiter:
+                            fname = kwargs.get('out_fname')
+                        else:
+                            fname = kwargs.get('out_fname') + '.progress'
+                    else:
+                        if iter == maxiter:
+                            fname = '{}.ps'.format(solution)
+                        else:
+                            fname = '{}.progress.ps'.format(solution)
+
+                    if progress_every_niters > 0:
+                        solution_ps.save(fname, compact=True, sort_by_context=False)
+
+
+        else:
+            # NOTE: because we overrode self._run_worker to skip loading the
+            # bundle, b is just a json string here.  If we ever need the
+            # bundle in here, just remove the override for self._run_worker.
+            pool.wait()
+
+        if pool is not None:
+            pool.close()
+
+        # restore previous MPI state
+        mpi._within_mpirun = within_mpirun
+        mpi._enabled = mpi_enabled
+
+        if is_master:
+            return _get_packetlist(sampler.results, progress=100)
+        return
 
 
 class _ScipyOptimizeBaseBackend(BaseSolverBackend):

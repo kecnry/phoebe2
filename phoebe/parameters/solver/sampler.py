@@ -272,3 +272,113 @@ def dynesty(**kwargs):
 
 
     return ParameterSet(params)
+
+
+def ultranest(**kwargs):
+    """
+    Create a <phoebe.parameters.ParameterSet> for solver options for the
+    UltraNest backend.  To use this backend, you must have UltraNest installed.
+
+    To install UltraNest, see https://johannesbuchner.github.io/UltraNest/index.html
+
+    If using this backend for solver, consider citing:
+    * https://joss.theoj.org/papers/10.21105/joss.03001
+
+    See also:
+    * <phoebe.frontend.bundle.Bundle.references>
+
+    Generally, this will be used as an input to the kind argument in
+    <phoebe.frontend.bundle.Bundle.add_solver>.  If attaching through
+    <phoebe.frontend.bundle.Bundle.add_solver>, all `**kwargs` will be
+    passed on to set the values as described in the arguments below.  Alternatively,
+    see <phoebe.parameters.ParameterSet.set_value> to set/change the values
+    after creating the Parameters.
+
+    For example:
+
+    ```py
+    b.add_solver('sampler.ultranest')
+    b.run_solver(kind='ultranest')
+    ```
+
+    Parallelization support: ultranest supports....
+
+    The resulting solution (from <phoebe.frontend.bundle.Bundle.run_solver> or
+    <phoebe.frontend.bundle.Bundle.export_solver> and <phoebe.frontend.bundle.Bundle.import_solution>)
+    then exposes the raw-products from `dynesty`, after which the following
+    actions can be taken:
+
+    * <phoebe.parameters.ParameterSet.plot> with `style` as one of:
+        'corner', 'failed', 'trace', 'run'.
+    * <phoebe.frontend.bundle.Bundle.adopt_solution> to adopt the resulting
+        posteriors in a distribution.  Use `adopt_values=True` (defaults to False)
+        to adopt the face-values.  Use `trial_run=True` to see the adopted
+        distributions and/or values without applying to the Bundle.
+    * <phoebe.frontend.bundle.Bundle.get_distribution_collection> to access
+        the multivariate distribution representation of the posteriors.
+
+
+    Arguments
+    ----------
+    * `compute` (string, optional): compute options to use for forward model
+    * `priors` (list, optional, default=[]): distribution(s) to use for priors
+        (as dynesty samples directly from the prior, constrained parameters will
+        be ignored, covariances will be dropped)
+    * `priors_combine` (string, optional, default='and'): only applicable
+        if `priors` is not empty.  Method to use to combine multiple distributions
+        from `priors` for the same parameter.
+        first: ignore duplicate entries and take the first in the priors parameter.
+        and: combine duplicate entries via AND logic, dropping covariances.
+        or: combine duplicate entries via OR logic, dropping covariances.
+    * `priors_requires` (string or list, optional, default=['limits']):
+        Requirements to apply to the initializing distribution.  Including all
+        checks prevents walkers from initializing at `lnprob=-inf`, but does add
+        overhead.  See <phoebe.frontend.bundle.Bundle.sample_distribution_collection>
+        for explanation of each option.
+    * `nlive` (int, optional, default=100): number of live points.   Larger
+        numbers result in a more finely sampled posterior (more accurate evidence),
+        but also a larger number of iterations required to converge.
+    * `maxiter` (int, optional, default=100): maximum number of iterations
+    * `maxcall` (int, optional, default=1000): maximum number of calls (forward models)
+    * `progress_every_niters` (int, optional, default=0): Save the progress of
+        the solution every n iterations.  The solution can only be recovered
+        from an early termination by loading the bundle from a saved file and
+        then calling <phoebe.frontend.bundle.Bundle.import_solution>(filename).
+        The filename of the saved file will default to solution.ps.progress within
+        <phoebe.frontend.bundle.Bundle.run_solver>, or the output filename provided
+        to <phoebe.frontend.bundle.Bundle.export_solver> suffixed with .progress.
+        If using detach=True within run_solver, attach job will load the progress
+        and allow re-attaching until the job is completed.  If 0 will not save
+        and will only return after completion.
+    * `expose_failed` (bool, optional, default=True): only applicable if
+        `continue_from` is 'None'. whether to expose dictionary of failed samples
+        and their error messages.  Note: depending on the number of failed
+        samples, this could add overhead.
+
+
+    Returns
+    --------
+    * (<phoebe.parameters.ParameterSet>): ParameterSet of all newly created
+        <phoebe.parameters.Parameter> objects.
+    """
+    params = _comments_params(**kwargs)
+    params += _server_params(**kwargs)
+
+    params += [ChoiceParameter(qualifier='compute', value=kwargs.get('compute', 'None'), choices=['None'], description='compute options to use for forward model')]
+
+    params += [SelectParameter(qualifier='priors', value=kwargs.get('priors', []), choices=[], description='distribution(s) to use for priors (as dynesty samples directly from the prior, constrained parameters will be ignored, covariances will be dropped)')]
+    params += [ChoiceParameter(visible_if='priors:<plural>', qualifier='priors_combine', value=kwargs.get('priors_combine', 'and'), choices=['first', 'and', 'or'], advanced=True, description='Method to use to combine multiple distributions from priors for the same parameter. first: ignore duplicate entries and take the first in the priors parameter. and: combine duplicate entries via AND logic, dropping covariances.  or: combine duplicate entries via OR logic, dropping covariances.')]
+    params += [SelectParameter(visible_if='priors:<notempty>', qualifier='priors_requires', value=kwargs.get('priors_requires', ['limits']), choices=['limits'], advanced=True, description='Requirements to apply to the priors distribution.   limits: apply parameter limits (cheap if init_from are univariates, otherwise requires testing samples).  ')]
+
+    ## THE FOLLOWING SECTION IS BACKEND-DEPENDENT (update these to whatever ultranest needs as inputs
+    # and update the docstring above accordingly)
+    params += [IntParameter(qualifier='nlive', value=kwargs.get('nlive', 100), limits=(1,1e12), description='number of live points.   Larger numbers result in a more finely sampled posterior (more accurate evidence), but also a larger number of iterations required to converge.')]
+    params += [IntParameter(qualifier='maxiter', value=kwargs.get('maxiter', 100), limits=(1,1e12), description='maximum number of iterations')]
+    params += [IntParameter(qualifier='maxcall', value=kwargs.get('maxcall', 1000), limits=(1,1e12), description='maximum number of calls (forward models)')]
+
+    params += [IntParameter(qualifier='progress_every_niters', value=kwargs.get('progress_every_niters', 0), limits=(0,1e6), description='save the progress of the solution every n iterations.  The solution can only be recovered from an early termination by loading the bundle from a saved file and then calling b.import_solution(filename).  The filename of the saved file will default to solution.ps.progress within run_solver, or the output filename provided to export_solver suffixed with .progress.  If using detach=True within run_solver, attach job will load the progress and allow re-attaching until the job is completed.  If 0 will not save and will only return after completion.')]
+
+    params += [BoolParameter(qualifier='expose_failed', value=kwargs.get('expose_failed', True), description='whether to expose dictionary of failed samples and their error messages.  Note: depending on the number of failed samples, this could add overhead.')]
+
+
+    return ParameterSet(params)
