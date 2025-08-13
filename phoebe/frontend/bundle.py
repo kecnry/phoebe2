@@ -12638,7 +12638,14 @@ class Bundle(ParameterSet):
         --------
         * NotImplementedError: if a required constraint is not implemented
         """
-        func = _get_add_func(_solver, kind)
+        if getattr(kind, '_phoebe_custom_solver', False):
+            func = kind.get_parameters
+            kind_name = kind.__name__
+            custom_solver = True
+        else:
+            func = _get_add_func(_solver, kind)
+            kind_name = kind
+            custom_solver = False
 
         # remove if None
         if kwargs.get('solver', False) is None:
@@ -12669,6 +12676,10 @@ class Bundle(ParameterSet):
         # TODO: similar kwargs logic as in add_dataset (option to pass dict to
         # apply to different components this would be more complicated here if
         # allowing to also pass to different datasets
+
+        if custom_solver:
+            # then add another parameter that stores the class to run the feature itself
+            params += [CodeParameter(qualifier='custom_code', value=kind, readonly=True)]
 
         metawargs = {'context': 'solver',
                      'kind': func.__name__,
@@ -13540,7 +13551,10 @@ class Bundle(ParameterSet):
             return job_param
 
 
-        solver_class = getattr(_solverbackends, '{}Backend'.format(solver_ps.kind.title()))
+        if 'custom_code' in solver_ps.qualifiers:
+            solver_class = solver_ps.get_value(qualifier='custom_code', **_skip_filter_checks)
+        else:
+            solver_class = getattr(_solverbackends, '{}Backend'.format(solver_ps.kind.title()))
         params = solver_class().run(self, solver_ps.solver, compute, solution=solution, **{k:v for k,v in kwargs.items() if k not in ['compute']})
         metawargs = {'context': 'solution',
                      'solver': solver_ps.solver,
