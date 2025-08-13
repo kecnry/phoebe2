@@ -438,3 +438,57 @@ def ebai(**kwargs):
     params += [ChoiceParameter(qualifier='orbit', value=kwargs.get('orbit', ''), choices=[''], description='Orbit to use for phasing the light curve referenced in the lc_datasets parameter')]
 
     return ParameterSet(params)
+
+
+def polybaseline_sigma_clipping(**kwargs):
+    """
+    Create a <phoebe.parameters.ParameterSet> for solver options to determine the
+    coefficients for a polynomial baseline feature via sigma clipping.
+
+    Generally, this will be used as an input to the kind argument in
+    <phoebe.frontend.bundle.Bundle.add_solver>.  If attaching through
+    <phoebe.frontend.bundle.Bundle.add_solver>, all `**kwargs` will be
+    passed on to set the values as described in the arguments below.  Alternatively,
+    see <phoebe.parameters.ParameterSet.set_value> to set/change the values
+    after creating the Parameters.
+
+    For example:
+
+    ```py
+    b.add_solver('estimator.polybaseline_sigma_clipping')
+    b.run_solver(kind='polybaseline_sigma_clipping')
+    ```
+
+    Arguments
+    ----------
+    * `lc_datasets` (string or list, optional, default='*'): Light curve
+        dataset(s) to pass to ebai.
+    * `lc_combine` (string, optional, default='median'): How to normalize each
+        light curve prior to combining.
+    * `polybaseline_feature` (string, optional, default=None): Which 
+         Polynomial Baseline feature to propose coefficients from the baseline
+    * `sigma_lower` (float, optional, default=0.5):
+    * `sigma_upper` (float, optional, default=2):
+        
+
+    Returns
+    --------
+    * (<phoebe.parameters.ParameterSet>): ParameterSet of all newly created
+        <phoebe.parameters.Parameter> objects.
+    """
+    params = _comments_params(**kwargs)
+    params += _server_params(**kwargs)
+
+    params += [SelectParameter(qualifier='lc_datasets', value=kwargs.get('lc_datasets', '*'), choices=[], description='Light curve dataset(s) to pass to ebai')]
+    params += [ChoiceParameter(visible_if='lc_datasets:<plural>', qualifier='lc_combine', value=kwargs.get('lc_combine', 'median'), choices=['median', 'max'], advanced=True, description='How to normalize each light curve prior to combining.')]
+
+    params += [ChoiceParameter(qualifier='polybaseline_feature', value=kwargs.get('polybaseline_feature', 'None'), choices=[], description='Which Polynomial Baseline feature to propose coefficients from the baseline')]
+
+    params += [IntParameter(qualifier='sigma_lower',
+                            value=kwargs.get('sigma_lower', 0.5),
+                            description='Lower sigma for sigma-clipping')]
+    params += [IntParameter(qualifier='sigma_upper',
+                            value=kwargs.get('sigma_upper', 2),
+                            description='Upper sigma for sigma-clipping')]
+
+    return ParameterSet(params)

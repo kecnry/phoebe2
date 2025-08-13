@@ -2173,6 +2173,31 @@ class Bundle(ParameterSet):
 
         return affected_params
 
+    def _handle_polybaselinefeature_choiceparams(self, return_changes=False):
+        affected_params = []
+
+        choices = self.filter(context='feature', kind='polybaseline', **_skip_filter_checks).features
+
+        for param in self.filter(qualifier='polybaseline_feature', context='solver', **_skip_filter_checks).to_list():
+            choices_changed = False
+            if return_changes and choices != param._choices:
+                choices_changed = True
+            param._choices = choices
+
+            if param._value not in choices:
+                changed = True
+                if param._value == 'None' and len(choices):
+                    param._value = choices[0]
+                else:
+                    param._value = 'None'
+            else:
+                changed = False
+
+            if return_changes and (changed or choices_changed):
+                affected_params.append(param)
+
+        return affected_params
+
     def _handle_compute_choiceparams(self, return_changes=False):
         affected_params = []
 
@@ -5693,6 +5718,7 @@ class Bundle(ParameterSet):
 
         ret_changes = []
         ret_changes += self._handle_fitparameters_selecttwigparams(return_changes=return_changes)
+        ret_changes += self._handle_polybaselinefeature_choiceparams(return_changes=return_changes)
 
         if kwargs.get('overwrite', False) and return_changes:
             ret_ps += overwrite_ps
@@ -12695,6 +12721,8 @@ class Bundle(ParameterSet):
         ret_changes += self._handle_orbit_choiceparams(return_changes=return_changes)
         ret_changes += self._handle_component_choiceparams(return_changes=return_changes)
         ret_changes += self._handle_server_selectparams(return_changes=return_changes)
+        if 'polybaseline_feature' in params.qualifiers:
+            ret_changes += self._handle_polybaselinefeature_choiceparams(return_changes=return_changes)
 
         ret_ps = self.get_solver(check_visible=False, check_default=False, **metawargs)
 

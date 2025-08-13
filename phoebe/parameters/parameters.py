@@ -270,7 +270,7 @@ _forbidden_labels += ['nwalkers', 'niters', 'priors', 'priors_requires', 'init_f
                       'nlive', 'maxcall', 'lc_geometry', 'rv_geometry', 'lc_periodogram', 'rv_periodogram', 'ebai',
                       'nelder_mead', 'differential_evolution', 'cg', 'powell', 'emcee', 'dynesty',
                       'analytical_model', 'interactive', 'differential_corrections',
-                      'deriv_method', 'steps', 'nsteps']
+                      'deriv_method', 'steps', 'nsteps', 'sigma_lower', 'sigma_upper']
 
 # from solution:
 _forbidden_labels += ['primary_width', 'secondary_width',
@@ -300,7 +300,7 @@ _forbidden_labels += ['colat', 'long', 'radius', 'relteff',
                       'rho', 'sigma', 'tau', 'period', 'Q0', 'dQ', 'f', 'eps',
                       'sigma_0', 'constant_value_bounds', 'length_scale_bounds',
                       'noise_level_bounds', 'periodicity_bounds', 'alpha_bounds', 'nu_bounds',
-                      'sigma_0_bounds', 'alg_operation', 'feature_type', 'custom_code'
+                      'sigma_0_bounds', 'alg_operation', 'feature_type', 'custom_code', 'coeffs'
                       ]
 
 # from figure:

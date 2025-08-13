@@ -5,7 +5,7 @@ import logging
 logger = logging.getLogger("DATASET_FEATURES")
 logger.addHandler(logging.NullHandler())
 
-from phoebe.parameters import FloatParameter, ChoiceParameter, StringParameter, ParameterSet
+from phoebe.parameters import FloatParameter, FloatArrayParameter, IntParameter, ChoiceParameter, StringParameter, ParameterSet
 from phoebe.features.common import BaseFeature
 
 __all__ = ['DatasetFeature']
@@ -249,3 +249,39 @@ class RVOffset(DatasetFeature):
     def modify_model(self, b, model_ps):
         for rv_param in model_ps.filter(qualifier='rvs', kind=['rv', 'mesh'], **_skip_filter_checks).to_list():
             rv_param.set_value(rv_param.get_value() + self.kwargs.get(rv_param.component).to_value(rv_param.default_unit), ignore_readonly=True, **_skip_filter_checks)
+
+
+class PolynomialBaseline(DatasetFeature):
+    allowed_dataset_kinds = ['lc']
+
+    @classmethod
+    def create_feature_parameters(self, feature, **kwargs):
+        params = []
+        params += [IntParameter(qualifier='order',
+                                value=kwargs.get('order', 12),
+                                description='Order of the legendre polynomial')]
+        params += [FloatArrayParameter(qualifier='coeffs',
+                                       value=kwargs.get('coeffs', [1.0]*12),
+                                       default_unit=u.dimensionless_unscaled,
+                                       description='Legendre polynomial coefficients')]
+
+        # TODO: allow injecting a parameter check into check_features
+        return ParameterSet(params), []
+
+    @classmethod
+    def parse_bundle(cls, b, feature_ps):
+        return cls.parse_from_feature_ps(b, feature_ps,
+                                         ['coeffs'])
+
+    def get_analytic_contribution(self, times):
+        import numpy as np
+        return np.polynomial.legendre.legval(times, self.kwargs['coeffs'], tensor=False)
+
+    def modify_data_for_estimators(self, b, dataset_ps, **kwargs):
+        return {'fluxes': kwargs.get('fluxes') / self.get_analytic_contribution(kwargs.get('times'))}
+    
+    def modify_model(self, b, model_ps):
+        for flux_param in model_ps.filter(qualifier='fluxes').tolist():
+            times = model_ps.get_value(qualifier='times', dataset=flux_param.dataset, unit='d')
+            flux_param.set_value(flux_param.get_value() * self.get_analytic_contribution(times), ignore_readonly=True)
+
