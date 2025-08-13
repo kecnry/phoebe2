@@ -10,8 +10,6 @@ from phoebe.features.common import BaseFeature
 
 __all__ = ['DatasetFeature']
 
-_skip_filter_checks = {'check_default': False, 'check_visible': False}
-
 
 class DatasetFeature(BaseFeature):
     """
@@ -244,9 +242,9 @@ class RVOffset(DatasetFeature):
         """
         Initialize an RVOffset feature from the bundle
         """
-        rv_offsets = feature_ps.filter(qualifier='rv_offset', **_skip_filter_checks)
-        return {param.component: param.get_quantity(**_skip_filter_checks) for param in rv_offsets.to_list()}
+        rv_offsets = feature_ps.filter(qualifier='rv_offset')
+        return {param.component: param.get_quantity() for param in rv_offsets.to_list()}
 
     def modify_model(self, b, model_ps):
-        for rv_param in model_ps.filter(qualifier='rvs', kind=['rv', 'mesh'], **_skip_filter_checks).to_list():
-            rv_param.set_value(rv_param.get_value() + self.kwargs.get(rv_param.component).to_value(rv_param.default_unit), ignore_readonly=True, **_skip_filter_checks)
+        for rv_param in model_ps.filter(qualifier='rvs', kind=['rv', 'mesh']).to_list():
+            rv_param.set_value(rv_param.get_value() + self.kwargs.get(rv_param.component).to_value(rv_param.default_unit), ignore_readonly=True)

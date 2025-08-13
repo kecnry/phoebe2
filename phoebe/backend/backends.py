@@ -69,8 +69,6 @@ logger.addHandler(logging.NullHandler())
 # the following list is for backends that use numerical meshes
 _backends_that_require_meshing = ['phoebe', 'legacy']
 
-_skip_filter_checks = {'check_default': False, 'check_visible': False}
-
 def _simplify_error_message(msg):
     # simplify error messages so values, etc, don't create separate
     # entries in the returned dictionary.
@@ -108,7 +106,7 @@ def _needs_mesh(b, dataset, kind, component, compute):
     # if kind == 'lc' and compute_kind=='phoebe' and b.get_value(qualifier='lc_method', compute=compute, dataset=dataset, context='compute')=='analytical':
     #     return False
 
-    if kind == 'rv' and (compute_kind == 'legacy' or b.get_value(qualifier='rv_method', compute=compute, component=component, dataset=dataset, context='compute', **_skip_filter_checks)=='dynamical'):
+    if kind == 'rv' and (compute_kind == 'legacy' or b.get_value(qualifier='rv_method', compute=compute, component=component, dataset=dataset, context='compute')=='dynamical'):
         return False
 
     return True
@@ -120,30 +118,30 @@ def _timequalifier_by_kind(kind):
 def _expand_mesh_times(b, dataset_ps, component):
     def get_times(b, include_times_entry):
         if include_times_entry in b.datasets:
-            add_ps = b.filter(dataset=include_times_entry, context='dataset', **_skip_filter_checks)
+            add_ps = b.filter(dataset=include_times_entry, context='dataset')
             add_timequalifier = _timequalifier_by_kind(add_ps.kind)
-            add_ps_compute_times_components = add_ps.filter(qualifier='compute_times', **_skip_filter_checks).components
+            add_ps_compute_times_components = add_ps.filter(qualifier='compute_times').components
             if len(add_ps.times):
                 add_times = np.array([float(t) for t in add_ps.times])
             elif len(add_ps_compute_times_components):
                 # then we need to concatenate over all components_
                 # (times@rv@primary and times@rv@secondary are not necessarily
                 # identical)
-                add_times = np.unique(np.append(*[add_ps.get_value(qualifier='compute_times', component=c, **_skip_filter_checks) for c in add_ps_compute_times_components]))
+                add_times = np.unique(np.append(*[add_ps.get_value(qualifier='compute_times', component=c) for c in add_ps_compute_times_components]))
             else:
                 # then we're adding from some dataset at the system-level (like lcs)
                 # that have component=None
-                add_times = add_ps.get_value(qualifier='compute_times', component=None, unit=u.d, **_skip_filter_checks)
+                add_times = add_ps.get_value(qualifier='compute_times', component=None, unit=u.d)
 
             if not len(add_times):
-                add_ps_components = add_ps.filter(qualifier=add_timequalifier, **_skip_filter_checks).components
+                add_ps_components = add_ps.filter(qualifier=add_timequalifier).components
                 if len(add_ps_components):
-                    add_times = np.unique(np.append(*[add_ps.get_value(qualifier=add_timequalifier, component=c, **_skip_filter_checks) for c in add_ps_components]))
+                    add_times = np.unique(np.append(*[add_ps.get_value(qualifier=add_timequalifier, component=c) for c in add_ps_components]))
                 else:
-                    add_times = add_ps.get_value(qualifier=add_timequalifier, component=None, unit=u.d, **_skip_filter_checks)
+                    add_times = add_ps.get_value(qualifier=add_timequalifier, component=None, unit=u.d)
         else:
             # then some sort of t0 from context='component' or 'system'
-            add_times = [b.get_value(include_times_entry, context=['component', 'system'], **_skip_filter_checks)]
+            add_times = [b.get_value(include_times_entry, context=['component', 'system'])]
 
         return add_times
 
@@ -154,7 +152,7 @@ def _expand_mesh_times(b, dataset_ps, component):
     # we're first going to access the compute_times@mesh... this should not have a component tag
     this_times = dataset_ps.get_value(qualifier='compute_times', component=None, unit=u.d)
     this_times = np.unique(np.append(this_times,
-                                     [get_times(b, include_times_entry) for include_times_entry in dataset_ps.get_value(qualifier='include_times', expand=True, **_skip_filter_checks)]
+                                     [get_times(b, include_times_entry) for include_times_entry in dataset_ps.get_value(qualifier='include_times', expand=True)]
                                      )
                            )
 
@@ -204,13 +202,13 @@ def _extract_from_bundle(b, compute, dataset=None, times=None,
     # now have their own entries.)
 
     if dataset is None:
-        datasets = b.filter(qualifier='enabled', compute=compute, value=True, **_skip_filter_checks).datasets
+        datasets = b.filter(qualifier='enabled', compute=compute, value=True).datasets
     else:
-        datasets = b.filter(dataset=dataset, context='dataset', **_skip_filter_checks).datasets
+        datasets = b.filter(dataset=dataset, context='dataset').datasets
 
     for dataset in datasets:
-        dataset_ps = b.filter(context='dataset', dataset=dataset, **_skip_filter_checks)
-        dataset_compute_ps = b.filter(context='compute', dataset=dataset, compute=compute, **_skip_filter_checks)
+        dataset_ps = b.filter(context='dataset', dataset=dataset)
+        dataset_compute_ps = b.filter(context='compute', dataset=dataset, compute=compute)
         dataset_kind = dataset_ps.kind
         time_qualifier = _timequalifier_by_kind(dataset_kind)
         if dataset_kind in ['lc']:
@@ -231,7 +229,7 @@ def _extract_from_bundle(b, compute, dataset=None, times=None,
             elif dataset_kind == 'mesh' and include_mesh:
                 this_times = _expand_mesh_times(b, dataset_ps, component)
             elif dataset_kind in ['lp']:
-                this_times = np.unique(dataset_ps.get_value(qualifier='compute_times', unit=u.d, **_skip_filter_checks))
+                this_times = np.unique(dataset_ps.get_value(qualifier='compute_times', unit=u.d))
                 if not len(this_times):
                     # then we have Parameters tagged by times, this will probably
                     # also apply to spectra.
@@ -241,9 +239,9 @@ def _extract_from_bundle(b, compute, dataset=None, times=None,
                 timecomponent = component if dataset_kind not in ['mesh', 'lc'] else None
                 # print "*****", dataset_kind, dataset_ps.kinds, timequalifier, timecomponent
                 # NOTE: compute_times is not component-dependent, but times can be (i.e. for RV datasets)
-                this_times = dataset_ps.get_value(qualifier='compute_times', unit=u.d, **_skip_filter_checks)
+                this_times = dataset_ps.get_value(qualifier='compute_times', unit=u.d)
                 if not len(this_times):
-                    this_times = dataset_ps.get_value(qualifier=timequalifier, component=timecomponent, unit=u.d, **_skip_filter_checks)
+                    this_times = dataset_ps.get_value(qualifier=timequalifier, component=timecomponent, unit=u.d)
 
                 # we may also need to compute at other times if requested by a
                 # mesh with this dataset in datasets@mesh
@@ -255,8 +253,8 @@ def _extract_from_bundle(b, compute, dataset=None, times=None,
                         # this_times = np.unique(np.append(this_times, mesh_times))
 
             if dataset_kind in ['lc'] and \
-                    b.get_value(qualifier='exptime', dataset=dataset, **_skip_filter_checks) > 0 and \
-                    dataset_compute_ps.get_value(qualifier='fti_method', fti_method=kwargs.get('fti_method', None), **_skip_filter_checks)=='oversample':
+                    b.get_value(qualifier='exptime', dataset=dataset) > 0 and \
+                    dataset_compute_ps.get_value(qualifier='fti_method', fti_method=kwargs.get('fti_method', None))=='oversample':
 
                 # Then we need to override the times retrieved from the dataset
                 # with the oversampled times.  Later we'll do an average over
@@ -264,7 +262,7 @@ def _extract_from_bundle(b, compute, dataset=None, times=None,
                 # NOTE: here we assume that the dataset times are at mid-exposure,
                 # if we want to allow more flexibility, we'll need a parameter
                 # that gives this option and different logic for each case.
-                exptime = dataset_ps.get_value(qualifier='exptime', unit=u.d, **_skip_filter_checks)
+                exptime = dataset_ps.get_value(qualifier='exptime', unit=u.d)
                 fti_oversample = dataset_compute_ps.get_value(qualifier='fti_oversample', check_visible=False, **kwargs)
                 # NOTE: if changing this, also change in bundle.run_compute
                 this_times = np.array([np.linspace(t-exptime/2., t+exptime/2., fti_oversample) for t in this_times]).flatten()
@@ -272,7 +270,7 @@ def _extract_from_bundle(b, compute, dataset=None, times=None,
             if dataset_kind in ['lp']:
                 # for line profiles and spectra, we only need to compute synthetic
                 # model if there are defined wavelengths
-                this_wavelengths = dataset_ps.get_value(qualifier='wavelengths', component=component, **_skip_filter_checks)
+                this_wavelengths = dataset_ps.get_value(qualifier='wavelengths', component=component)
             else:
                 this_wavelengths = None
 
@@ -290,10 +288,10 @@ def _extract_from_bundle(b, compute, dataset=None, times=None,
                     # of columns@mesh.  Let's store the needed information here,
                     # where mesh_datasets and mesh_kinds correspond to each
                     # other (but mesh_columns does not).
-                    info['mesh_coordinates'] = dataset_ps.get_value(qualifier='coordinates', expand=True, **_skip_filter_checks)
-                    info['mesh_columns'] = dataset_ps.get_value(qualifier='columns', expand=True, **_skip_filter_checks)
+                    info['mesh_coordinates'] = dataset_ps.get_value(qualifier='coordinates', expand=True)
+                    info['mesh_columns'] = dataset_ps.get_value(qualifier='columns', expand=True)
                     info['mesh_datasets'] = list(set([c.split('@')[1] for c in info['mesh_columns'] if len(c.split('@'))>1]))
-                    info['mesh_kinds'] = [b.filter(dataset=ds, context='dataset', **_skip_filter_checks).kind for ds in info['mesh_datasets']]
+                    info['mesh_kinds'] = [b.filter(dataset=ds, context='dataset').kind for ds in info['mesh_datasets']]
 
                 if by_time:
                     for time_ in this_times:
@@ -642,7 +640,7 @@ def _call_run_single_model(args):
             if isinstance(value, np.ndarray):
                 value = value[0]
             # print("setting uniqueid={}, value={}".format(uniqueid, value))
-            ref_param = b.get_parameter(uniqueid=uniqueid, **_skip_filter_checks)
+            ref_param = b.get_parameter(uniqueid=uniqueid)
             try:
                 if index is None:
                     ref_param.set_value(value)
@@ -689,7 +687,7 @@ def _test_single_sample(args):
         for uniqueid, sample_value in zip(uniqueids, sample_per_param):
 
             uniqueid, index = _extract_index_from_string(uniqueid)
-            ref_param = b_copy.get_parameter(uniqueid=uniqueid, **_skip_filter_checks)
+            ref_param = b_copy.get_parameter(uniqueid=uniqueid)
 
             try:
                 if index is None:
@@ -769,7 +767,7 @@ class SampleOverModel(object):
             logger.info("run_compute sample_from using MPI")
             pool = _pool.MPIPool()
             is_master = pool.is_master()
-        elif conf.multiprocessing_nprocs==0 or b.get_value(qualifier='sample_num', compute=compute, sample_num=kwargs.get('sample_num', None), **_skip_filter_checks) == 1:
+        elif conf.multiprocessing_nprocs==0 or b.get_value(qualifier='sample_num', compute=compute, sample_num=kwargs.get('sample_num', None)) == 1:
             logger.info("run_compute sample_from: serial mode")
             pool = _pool.SerialPool()
             is_master = True
@@ -786,15 +784,15 @@ class SampleOverModel(object):
         mpi._enabled = False
 
         if is_master:
-            compute_ps = b.get_compute(compute=compute, **_skip_filter_checks)
+            compute_ps = b.get_compute(compute=compute)
             compute_kwargs = {k:v for k,v in kwargs.items() if k in compute_ps.qualifiers+['progressbar', 'skip_checks', 'times'] and 'sample' not in k}
 
-            # sample_from = compute_ps.get_value(qualifier='sample_from', sample_from=kwargs.get('sample_from', None), expand=True, **_skip_filter_checks)
-            # sample_from_combine = compute_ps.get_value(qualifier='sample_from_combine', sample_from_combine=kwargs.get('sample_from_combine', None), **_skip_filter_checks)
-            sample_num = compute_ps.get_value(qualifier='sample_num', sample_num=kwargs.get('sample_num', None), **_skip_filter_checks)
-            sample_mode = compute_ps.get_value(qualifier='sample_mode', sample_mode=kwargs.get('sample_mode', None), **_skip_filter_checks)
-            expose_samples = compute_ps.get_value(qualifier='expose_samples', expose_samples=kwargs.get('expose_samples', None), **_skip_filter_checks)
-            expose_failed = compute_ps.get_value(qualifier='expose_failed', expose_failed=kwargs.get('expose_failed', None), **_skip_filter_checks)
+            # sample_from = compute_ps.get_value(qualifier='sample_from', sample_from=kwargs.get('sample_from', None), expand=True)
+            # sample_from_combine = compute_ps.get_value(qualifier='sample_from_combine', sample_from_combine=kwargs.get('sample_from_combine', None))
+            sample_num = compute_ps.get_value(qualifier='sample_num', sample_num=kwargs.get('sample_num', None))
+            sample_mode = compute_ps.get_value(qualifier='sample_mode', sample_mode=kwargs.get('sample_mode', None))
+            expose_samples = compute_ps.get_value(qualifier='expose_samples', expose_samples=kwargs.get('expose_samples', None))
+            expose_failed = compute_ps.get_value(qualifier='expose_failed', expose_failed=kwargs.get('expose_failed', None))
 
             # samples = range(sample_num)
             # note: sample_from can be any combination of solutions and distributions
@@ -837,8 +835,8 @@ class SampleOverModel(object):
                     _active_pbar.update(1)
 
             bexcl = b.copy()
-            bexcl.remove_parameters_all(context=['model', 'solver', 'solutoin', 'figure'], **_skip_filter_checks)
-            bexcl.remove_parameters_all(kind=['orb', 'mesh'], context='dataset', **_skip_filter_checks)
+            bexcl.remove_parameters_all(context=['model', 'solver', 'solutoin', 'figure'])
+            bexcl.remove_parameters_all(kind=['orb', 'mesh'], context='dataset')
             args_per_sample = [(bexcl.copy(), {k:v[i] for k,v in sample_dict.items()}, sample_kwargs, compute, dataset, times, compute_kwargs, expose_samples, expose_failed, i, allow_retries) for i in range(sample_num)]
             models_success_failed = list(pool.map(_call_run_single_model, args_per_sample, callback=_sample_progress))
         else:
@@ -876,7 +874,7 @@ class SampleOverModel(object):
             for param in ret_ps.to_list():
                 param._bundle = None
                 if param.qualifier in ['fluxes', 'fluxes_nogps', 'gps', 'rvs']:
-                    all_values = np.array([p.get_value() for p in all_models_ps.filter(qualifier=param.qualifier, dataset=param.dataset, component=param.component, **_skip_filter_checks).to_list()])
+                    all_values = np.array([p.get_value() for p in all_models_ps.filter(qualifier=param.qualifier, dataset=param.dataset, component=param.component).to_list()])
                     if sample_mode == 'all':
                         param.set_value(all_values, ignore_readonly=True)
                     elif sample_mode == 'median':
@@ -893,7 +891,7 @@ class SampleOverModel(object):
             addl_params = []
             addl_params += [StringParameter(qualifier='sample_mode', value=sample_mode, readonly=True, description='mode used for sampling')]
             addl_params += [ArrayParameter(qualifier='sampled_uniqueids', value=list(sample_dict.keys()), advanced=True, readonly=True, description='uniqueids of sampled parameters')]
-            addl_params += [ArrayParameter(qualifier='sampled_twigs', value=[b.get_parameter(uniqueid=uniqueid, **_skip_filter_checks).twig for uniqueid in sample_dict.keys()], readonly=True, description='twigs of sampled parameters')]
+            addl_params += [ArrayParameter(qualifier='sampled_twigs', value=[b.get_parameter(uniqueid=uniqueid).twig for uniqueid in sample_dict.keys()], readonly=True, description='twigs of sampled parameters')]
             if expose_samples:
                 addl_params += [ArrayParameter(qualifier='samples', value=success_samples, readonly=True, description='samples that were drawn and successfully computed (in the units at the time run_compute was called).')]
             if expose_failed:
@@ -942,7 +940,7 @@ class PhoebeBackend(BaseBackendByTime):
                 dynamics_method = 'keplerian'
             else:
                 computeparams = b.get_compute(compute, force_ps=True)
-                dynamics_method = computeparams.get_value(qualifier='dynamics_method', dynamics_method=kwargs.get('dynamics_method', None), default='keplerian', **_skip_filter_checks)
+                dynamics_method = computeparams.get_value(qualifier='dynamics_method', dynamics_method=kwargs.get('dynamics_method', None), default='keplerian')
 
         if hier is None:
             hier = b.get_hierarchy()
@@ -951,7 +949,7 @@ class PhoebeBackend(BaseBackendByTime):
             starrefs  = hier.get_stars()
             meshablerefs = hier.get_meshables()
 
-        t0 = b.get_value(qualifier='t0', context='system', unit=u.d, t0=kwargs.get('t0', None), **_skip_filter_checks)
+        t0 = b.get_value(qualifier='t0', context='system', unit=u.d, t0=kwargs.get('t0', None))
 
         if len(meshablerefs) > 1 or hier.get_kind_of(meshablerefs[0])=='envelope':
             logger.debug("rank:{}/{} PhoebeBackend._create_system_and_compute_pblums: computing dynamics at t0".format(mpi.myrank, mpi.nprocs))
@@ -993,8 +991,8 @@ class PhoebeBackend(BaseBackendByTime):
         starrefs  = hier.get_stars()
         meshablerefs = hier.get_meshables()
         do_horizon = False #computeparams.get_value(qualifier='horizon', **kwargs)
-        dynamics_method = computeparams.get_value(qualifier='dynamics_method', dynamics_method=kwargs.pop('dynamics_method', None), **_skip_filter_checks)
-        ltte = computeparams.get_value(qualifier='ltte', ltte=kwargs.pop('ltte', None), **_skip_filter_checks)
+        dynamics_method = computeparams.get_value(qualifier='dynamics_method', dynamics_method=kwargs.pop('dynamics_method', None))
+        ltte = computeparams.get_value(qualifier='ltte', ltte=kwargs.pop('ltte', None))
 
         # b.compute_ld_coeffs(set_value=True) # TODO: only need if irradiation is enabled and only for bolometric
 
@@ -1597,8 +1595,7 @@ class LegacyBackend(BaseBackendByDataset):
             # per-component switches.
             rv_method = computeparams.get_value(qualifier ='rv_method',
                                                 component=info['component'],
-                                                dataset=info['dataset'],
-                                                **_skip_filter_checks)
+                                                dataset=info['dataset'])
 
             phb1.setpar(proximity_par, rv_method=='flux-weighted')
 
@@ -1840,26 +1837,26 @@ class JktebopBackend(BaseBackendByDataset):
 
         orbitref = orbitrefs[0]
 
-        ringsize = computeparams.get_value(qualifier='ringsize', unit=u.deg, ringsize=kwargs.get('ringsize', None), **_skip_filter_checks)
-        distortion_method = computeparams.get_value(qualifier='distortion_method', distortion_method=kwargs.get('distortion_method', None), **_skip_filter_checks)
-        irrad_method = computeparams.get_value(qualifier='irrad_method', irrad_method=kwargs.get('irrad_method', None), **_skip_filter_checks)
+        ringsize = computeparams.get_value(qualifier='ringsize', unit=u.deg, ringsize=kwargs.get('ringsize', None))
+        distortion_method = computeparams.get_value(qualifier='distortion_method', distortion_method=kwargs.get('distortion_method', None))
+        irrad_method = computeparams.get_value(qualifier='irrad_method', irrad_method=kwargs.get('irrad_method', None))
 
-        rA = b.get_value(qualifier='requiv', component=starrefs[0], context='component', unit=u.solRad, **_skip_filter_checks)
-        rB = b.get_value(qualifier='requiv', component=starrefs[1], context='component', unit=u.solRad, **_skip_filter_checks)
-        sma = b.get_value(qualifier='sma', component=orbitref, context='component', unit=u.solRad, **_skip_filter_checks)
-        sma_A = b.get_value(qualifier='sma', component=starrefs[0], context='component', unit=u.solRad, **_skip_filter_checks)
-        sma_B = b.get_value(qualifier='sma', component=starrefs[1], context='component', unit=u.solRad, **_skip_filter_checks)
-        incl = b.get_value(qualifier='incl', component=orbitref, context='component', unit=u.deg, **_skip_filter_checks)
-        q = b.get_value(qualifier='q', component=orbitref, context='component', **_skip_filter_checks)
-        ecc = b.get_value(qualifier='ecc', component=orbitref, context='component', **_skip_filter_checks)
-        ecosw = b.get_value(qualifier='ecosw', component=orbitref, context='component', **_skip_filter_checks)
-        esinw = b.get_value(qualifier='esinw', component=orbitref, context='component', **_skip_filter_checks)
+        rA = b.get_value(qualifier='requiv', component=starrefs[0], context='component', unit=u.solRad)
+        rB = b.get_value(qualifier='requiv', component=starrefs[1], context='component', unit=u.solRad)
+        sma = b.get_value(qualifier='sma', component=orbitref, context='component', unit=u.solRad)
+        sma_A = b.get_value(qualifier='sma', component=starrefs[0], context='component', unit=u.solRad)
+        sma_B = b.get_value(qualifier='sma', component=starrefs[1], context='component', unit=u.solRad)
+        incl = b.get_value(qualifier='incl', component=orbitref, context='component', unit=u.deg)
+        q = b.get_value(qualifier='q', component=orbitref, context='component')
+        ecc = b.get_value(qualifier='ecc', component=orbitref, context='component')
+        ecosw = b.get_value(qualifier='ecosw', component=orbitref, context='component')
+        esinw = b.get_value(qualifier='esinw', component=orbitref, context='component')
 
-        gravbA = b.get_value(qualifier='gravb_bol', component=starrefs[0], context='component', **_skip_filter_checks)
-        gravbB = b.get_value(qualifier='gravb_bol', component=starrefs[1], context='component', **_skip_filter_checks)
+        gravbA = b.get_value(qualifier='gravb_bol', component=starrefs[0], context='component')
+        gravbB = b.get_value(qualifier='gravb_bol', component=starrefs[1], context='component')
 
-        period = b.get_value(qualifier='period', component=orbitref, context='component', unit=u.d, **_skip_filter_checks)
-        t0_supconj = b.get_value(qualifier='t0_supconj', component=orbitref, context='component', unit=u.d, **_skip_filter_checks)
+        period = b.get_value(qualifier='period', component=orbitref, context='component', unit=u.d)
+        t0_supconj = b.get_value(qualifier='t0_supconj', component=orbitref, context='component', unit=u.d)
 
         return dict(compute=compute,
                     starrefs=starrefs,
@@ -1907,17 +1904,17 @@ class JktebopBackend(BaseBackendByDataset):
         t0_supconj = kwargs.get('t0_supconj')
 
         # get dataset-dependent things that we need
-        ldfuncA = b.get_value(qualifier='ld_func', component=starrefs[0], dataset=info['dataset'], context='dataset', **_skip_filter_checks)
-        ldfuncB = b.get_value(qualifier='ld_func', component=starrefs[1], dataset=info['dataset'], context='dataset', **_skip_filter_checks)
+        ldfuncA = b.get_value(qualifier='ld_func', component=starrefs[0], dataset=info['dataset'], context='dataset')
+        ldfuncB = b.get_value(qualifier='ld_func', component=starrefs[1], dataset=info['dataset'], context='dataset')
 
         # use check_visible=False to access the ld_coeffs from
         # compute_ld_coeffs(set_value=True) done in _worker_setup
-        ldcoeffsA = b.get_value(qualifier='ld_coeffs', component=starrefs[0], dataset=info['dataset'], context='dataset', **_skip_filter_checks)
-        ldcoeffsB = b.get_value(qualifier='ld_coeffs', component=starrefs[1], dataset=info['dataset'], context='dataset', **_skip_filter_checks)
+        ldcoeffsA = b.get_value(qualifier='ld_coeffs', component=starrefs[0], dataset=info['dataset'], context='dataset')
+        ldcoeffsB = b.get_value(qualifier='ld_coeffs', component=starrefs[1], dataset=info['dataset'], context='dataset')
 
         if irrad_method == "biaxial-spheroid":
-            albA = b.get_value(qualifier='irrad_frac_refl_bol', component=starrefs[0], context='component', **_skip_filter_checks)
-            albB = b.get_value(qualifier='irrad_frac_refl_bol', component=starrefs[1], context='component', **_skip_filter_checks)
+            albA = b.get_value(qualifier='irrad_frac_refl_bol', component=starrefs[0], context='component')
+            albB = b.get_value(qualifier='irrad_frac_refl_bol', component=starrefs[1], context='component')
         elif irrad_method == 'none':
             albA = 0.0
             albB = 0.0
@@ -2174,8 +2171,8 @@ class EllcBackend(BaseBackendByDataset):
         """
         logger.debug("rank:{}/{} EllcBackend._worker_setup".format(mpi.myrank, mpi.nprocs))
 
-        computeparams = b.get_compute(compute, force_ps=True, **_skip_filter_checks)
-        t0_system = b.get_value(qualifier='t0', context='system', unit=u.d, **_skip_filter_checks)
+        computeparams = b.get_compute(compute, force_ps=True)
+        t0_system = b.get_value(qualifier='t0', context='system', unit=u.d)
 
         hier = b.get_hierarchy()
 
@@ -2184,62 +2181,62 @@ class EllcBackend(BaseBackendByDataset):
 
         orbitref = orbitrefs[0]
 
-        shape_1 = computeparams.get_value(qualifier='distortion_method', component=starrefs[0], distortion_method=kwargs.get('distortion_method', None), **_skip_filter_checks)
-        shape_2 = computeparams.get_value(qualifier='distortion_method', component=starrefs[1], distortion_method=kwargs.get('distortion_method', None), **_skip_filter_checks)
+        shape_1 = computeparams.get_value(qualifier='distortion_method', component=starrefs[0], distortion_method=kwargs.get('distortion_method', None))
+        shape_2 = computeparams.get_value(qualifier='distortion_method', component=starrefs[1], distortion_method=kwargs.get('distortion_method', None))
 
-        hf_1 = computeparams.get_value(qualifier='hf', component=starrefs[0], hf=kwargs.get('hf', None), **_skip_filter_checks)
-        hf_2 = computeparams.get_value(qualifier='hf', component=starrefs[1], hf=kwargs.get('hf', None), **_skip_filter_checks)
+        hf_1 = computeparams.get_value(qualifier='hf', component=starrefs[0], hf=kwargs.get('hf', None))
+        hf_2 = computeparams.get_value(qualifier='hf', component=starrefs[1], hf=kwargs.get('hf', None))
 
-        grid_1 = computeparams.get_value(qualifier='grid', component=starrefs[0], grid=kwargs.get('grid', None), **_skip_filter_checks)
-        grid_2 = computeparams.get_value(qualifier='grid', component=starrefs[1], grid=kwargs.get('grid', None), **_skip_filter_checks)
+        grid_1 = computeparams.get_value(qualifier='grid', component=starrefs[0], grid=kwargs.get('grid', None))
+        grid_2 = computeparams.get_value(qualifier='grid', component=starrefs[1], grid=kwargs.get('grid', None))
 
-        exact_grav = computeparams.get_value(qualifier='exact_grav', exact_grav=kwargs.get('grav', None), **_skip_filter_checks)
+        exact_grav = computeparams.get_value(qualifier='exact_grav', exact_grav=kwargs.get('grav', None))
 
-        comp_ps = b.filter(context='component', **_skip_filter_checks)
+        comp_ps = b.filter(context='component')
 
-        a = comp_ps.get_value(qualifier='sma', component=orbitref, unit=u.solRad, **_skip_filter_checks)
-        radius_1 = comp_ps.get_value(qualifier='requiv', component=starrefs[0], unit=u.solRad, **_skip_filter_checks) / a
-        radius_2 = comp_ps.get_value(qualifier='requiv', component=starrefs[1], unit=u.solRad, **_skip_filter_checks) / a
+        a = comp_ps.get_value(qualifier='sma', component=orbitref, unit=u.solRad)
+        radius_1 = comp_ps.get_value(qualifier='requiv', component=starrefs[0], unit=u.solRad) / a
+        radius_2 = comp_ps.get_value(qualifier='requiv', component=starrefs[1], unit=u.solRad) / a
 
-        period_anom = comp_ps.get_value(qualifier='period_anom', component=orbitref, unit=u.d, **_skip_filter_checks)
-        q = comp_ps.get_value(qualifier='q', component=orbitref, **_skip_filter_checks)
+        period_anom = comp_ps.get_value(qualifier='period_anom', component=orbitref, unit=u.d)
+        q = comp_ps.get_value(qualifier='q', component=orbitref)
 
-        t_zero = comp_ps.get_value(qualifier='t0_supconj', component=orbitref, unit=u.d, **_skip_filter_checks)
+        t_zero = comp_ps.get_value(qualifier='t0_supconj', component=orbitref, unit=u.d)
 
-        incl = comp_ps.get_value(qualifier='incl', component=orbitref, unit=u.deg, **_skip_filter_checks)
+        incl = comp_ps.get_value(qualifier='incl', component=orbitref, unit=u.deg)
         didt = 0.0
         # didt = b.get_value(qualifier='dincldt', component=orbitref, context='component', unit=u.deg/u.d) * period
         # incl += didt * (t_zero - t0_system)
 
-        ecc = comp_ps.get_value(qualifier='ecc', component=orbitref, **_skip_filter_checks)
-        w = comp_ps.get_value(qualifier='per0', component=orbitref, unit=u.rad, **_skip_filter_checks)
+        ecc = comp_ps.get_value(qualifier='ecc', component=orbitref)
+        w = comp_ps.get_value(qualifier='per0', component=orbitref, unit=u.rad)
 
         # need to correct w (per0) to be at t_zero (t0_supconj) instead of t0@system as defined in PHOEBE
         logger.debug("per0(t0@system): {}".format(w))
-        domdt_rad = comp_ps.get_value(qualifier='dperdt', component=orbitref, unit=u.rad/u.d, **_skip_filter_checks)
+        domdt_rad = comp_ps.get_value(qualifier='dperdt', component=orbitref, unit=u.rad/u.d)
         w += domdt_rad * (t_zero - t0_system)
         logger.debug("per0(t0_supconj): {}".format(w))
 
         # NOTE: domdt is listed in ellc as deg/anomalistic period, but as deg/sidereal period in the fortran source (which agrees with comparisons)
         # NOTE: this does NOT need to be iterative, because the original dperdt is in deg/d and independent of period
         logger.debug("dperdt (rad/d): {}".format(domdt_rad))
-        period_sid = comp_ps.get_value(qualifier='period', component=orbitref, unit=u.d, **_skip_filter_checks)
+        period_sid = comp_ps.get_value(qualifier='period', component=orbitref, unit=u.d)
         # NOTE: period_sidereal does not need to be corrected from t0@system -> t0_supconj because ellc does not support dpdt
         logger.debug("period_sidereal(t0@system,t0_ref,dpdt=0): {}".format(period_sid))
-        domdt = comp_ps.get_value(qualifier='dperdt', component=orbitref, unit=u.deg/u.d, **_skip_filter_checks) * period_sid
+        domdt = comp_ps.get_value(qualifier='dperdt', component=orbitref, unit=u.deg/u.d) * period_sid
         logger.debug("dperdt (deg/d * period_sidereal): {}".format(domdt))
 
         f_c = np.sqrt(ecc) * np.cos(w)
         f_s = np.sqrt(ecc) * np.sin(w)
 
-        gdc_1 = comp_ps.get_value(qualifier='gravb_bol', component=starrefs[0], **_skip_filter_checks)
-        gdc_2 = comp_ps.get_value(qualifier='gravb_bol', component=starrefs[1], **_skip_filter_checks)
+        gdc_1 = comp_ps.get_value(qualifier='gravb_bol', component=starrefs[0])
+        gdc_2 = comp_ps.get_value(qualifier='gravb_bol', component=starrefs[1])
 
-        rotfac_1 = comp_ps.get_value(qualifier='syncpar', component=starrefs[0], **_skip_filter_checks)
-        rotfac_2 = comp_ps.get_value(qualifier='syncpar', component=starrefs[1], **_skip_filter_checks)
+        rotfac_1 = comp_ps.get_value(qualifier='syncpar', component=starrefs[0])
+        rotfac_2 = comp_ps.get_value(qualifier='syncpar', component=starrefs[1])
 
-        enabled_features = b.filter(qualifier='enabled', compute=compute, value=True, **_skip_filter_checks).features
-        spots = b.filter(feature=enabled_features, kind='spot', **_skip_filter_checks).features
+        enabled_features = b.filter(qualifier='enabled', compute=compute, value=True).features
+        spots = b.filter(feature=enabled_features, kind='spot').features
         if len(spots):
             # from ELLC docs:
             # spots_1 : (4, n_spots_1) array_like
@@ -2252,12 +2249,12 @@ class EllcBackend(BaseBackendByDataset):
             spots_1 = []
             spots_2 = []
             for spot in spots:
-                spot_ps = b.get_feature(feature=spot, **_skip_filter_checks)
+                spot_ps = b.get_feature(feature=spot)
                 spot_comp = spot_ps.component
-                spot_args = [-1*spot_ps.get_value(qualifier='long', unit=u.deg, **_skip_filter_checks),
-                             spot_ps.get_value(qualifier='colat', unit=u.deg, **_skip_filter_checks),
-                             spot_ps.get_value(qualifier='radius', unit=u.deg, **_skip_filter_checks),
-                             spot_ps.get_value(qualifier='relteff', **_skip_filter_checks)**4]
+                spot_args = [-1*spot_ps.get_value(qualifier='long', unit=u.deg),
+                             spot_ps.get_value(qualifier='colat', unit=u.deg),
+                             spot_ps.get_value(qualifier='radius', unit=u.deg),
+                             spot_ps.get_value(qualifier='relteff')**4]
                 if spot_comp == starrefs[0]:
                     spots_1.append(spot_args)
                 elif spot_comp == starrefs[1]:
@@ -2279,10 +2276,10 @@ class EllcBackend(BaseBackendByDataset):
         # The simplified reflection model is approximately equivalent to Lambert
         #     law scattering with the coefficients heat_1 and heat_2  being equal to
         #     A_g/2, where A_g is the geometric albedo.
-        irrad_method = computeparams.get_value(qualifier='irrad_method', irrad_method=kwargs.get('irrad_method', None), **_skip_filter_checks)
+        irrad_method = computeparams.get_value(qualifier='irrad_method', irrad_method=kwargs.get('irrad_method', None))
         if irrad_method == 'lambert':
-            heat_1 = b.get_value(qualifier='irrad_frac_refl_bol', component=starrefs[0], context='component', **_skip_filter_checks) / 2.
-            heat_2 = b.get_value(qualifier='irrad_frac_refl_bol', component=starrefs[1], context='component', **_skip_filter_checks) / 2.
+            heat_1 = b.get_value(qualifier='irrad_frac_refl_bol', component=starrefs[0], context='component') / 2.
+            heat_2 = b.get_value(qualifier='irrad_frac_refl_bol', component=starrefs[1], context='component') / 2.
             # let's save ourselves, and also allow for flux-weighted RVs
             if heat_1 == 0 and heat_2 == 0:
                 heat_1 = None
@@ -2410,33 +2407,33 @@ class EllcBackend(BaseBackendByDataset):
         spots_1 = kwargs.get('spots_1')
         spots_2 = kwargs.get('spots_2')
 
-        ds_ps = b.get_dataset(dataset=info['dataset'], **_skip_filter_checks)
+        ds_ps = b.get_dataset(dataset=info['dataset'])
         # get dataset-dependent things that we need
-        ldfuncA = ds_ps.get_value(qualifier='ld_func', component=starrefs[0], **_skip_filter_checks)
-        ldfuncB = ds_ps.get_value(qualifier='ld_func', component=starrefs[1], **_skip_filter_checks)
+        ldfuncA = ds_ps.get_value(qualifier='ld_func', component=starrefs[0])
+        ldfuncB = ds_ps.get_value(qualifier='ld_func', component=starrefs[1])
 
         # use check_visible=False to access the ld_coeffs from
         # compute_ld_coeffs(set_value=True) done in _worker_setup
-        ldcoeffsA = ds_ps.get_value(qualifier='ld_coeffs', component=starrefs[0], **_skip_filter_checks)
-        ldcoeffsB = ds_ps.get_value(qualifier='ld_coeffs', component=starrefs[1], **_skip_filter_checks)
+        ldcoeffsA = ds_ps.get_value(qualifier='ld_coeffs', component=starrefs[0])
+        ldcoeffsB = ds_ps.get_value(qualifier='ld_coeffs', component=starrefs[1])
 
-        ld_1 = _ellc_ld_func.get(ds_ps.get_value(qualifier='ld_func', component=starrefs[0], **_skip_filter_checks))
-        ldc_1 = ds_ps.get_value(qualifier='ld_coeffs', component=starrefs[0], **_skip_filter_checks)
-        ld_2 = _ellc_ld_func.get(ds_ps.get_value(qualifier='ld_func', component=starrefs[1], **_skip_filter_checks))
-        ldc_2 = ds_ps.get_value(qualifier='ld_coeffs', component=starrefs[1], **_skip_filter_checks)
+        ld_1 = _ellc_ld_func.get(ds_ps.get_value(qualifier='ld_func', component=starrefs[0]))
+        ldc_1 = ds_ps.get_value(qualifier='ld_coeffs', component=starrefs[0])
+        ld_2 = _ellc_ld_func.get(ds_ps.get_value(qualifier='ld_func', component=starrefs[1]))
+        ldc_2 = ds_ps.get_value(qualifier='ld_coeffs', component=starrefs[1])
 
         pblums = kwargs.get('pblums', {}).get(info['dataset'], {})
-        sbratio = (pblums.get(starrefs[1])/b.get_value(qualifier='requiv', component=starrefs[1], context='component', unit=u.solRad, **_skip_filter_checks)**2)/(pblums.get(starrefs[0])/b.get_value(qualifier='requiv', component=starrefs[0], context='component', unit=u.solRad, **_skip_filter_checks)**2)
+        sbratio = (pblums.get(starrefs[1])/b.get_value(qualifier='requiv', component=starrefs[1], context='component', unit=u.solRad)**2)/(pblums.get(starrefs[0])/b.get_value(qualifier='requiv', component=starrefs[0], context='component', unit=u.solRad)**2)
 
         if info['kind'] == 'lc':
             # third light handled by run_compute
             light_3 = 0.0
 
-            t_exp = ds_ps.get_value(qualifier='exptime', **_skip_filter_checks)
+            t_exp = ds_ps.get_value(qualifier='exptime')
 
             # move outside above 'lc' if-statement once exptime is supported for RVs in phoebe
-            if b.get_value(qualifier='fti_method', compute=compute, dataset=info['dataset'], context='compute', **_skip_filter_checks) == 'ellc':
-                n_int = b.get_value(qualifier='fti_oversample', compute=compute, dataset=info['dataset'], context='compute', **_skip_filter_checks)
+            if b.get_value(qualifier='fti_method', compute=compute, dataset=info['dataset'], context='compute') == 'ellc':
+                n_int = b.get_value(qualifier='fti_oversample', compute=compute, dataset=info['dataset'], context='compute')
             else:
                 n_int = 1
 
@@ -2492,7 +2489,7 @@ class EllcBackend(BaseBackendByDataset):
                                            info))
 
         elif info['kind'] == 'rv':
-            rv_method = b.get_value(qualifier='rv_method', compute=compute, dataset=info['dataset'], component=info['component'], context='compute', **_skip_filter_checks)
+            rv_method = b.get_value(qualifier='rv_method', compute=compute, dataset=info['dataset'], component=info['component'], context='compute')
 
             flux_weighted = rv_method == 'flux-weighted'
             # if flux_weighted:

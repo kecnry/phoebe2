@@ -65,7 +65,6 @@ from io import IOBase
 
 _bundle_cache_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'default_bundles'))+'/'
 
-_skip_filter_checks = {'check_default': False, 'check_visible': False}
 
 # Attempt imports for client requirements
 try:
@@ -745,7 +744,7 @@ class Bundle(ParameterSet):
             # Tycho:BT has been renamed to Tycho:B
             # Tycho:VT has been renamed to Tycho:V
             pb_map = {'TESS:default': 'TESS:T', 'Tycho:BT': 'Tycho:B', 'Tycho:VT': 'Tycho:V'}
-            for param in b.filter(qualifier='passband', **_skip_filter_checks).to_list():
+            for param in b.filter(qualifier='passband').to_list():
                 old_value = param.get_value()
                 if old_value in pb_map.keys():
                     new_value = pb_map.get(old_value)
@@ -753,7 +752,7 @@ class Bundle(ParameterSet):
                     param.set_value(new_value)
 
             existing_values_settings = {p.qualifier: p.get_value() for p in b.filter(context='setting').to_list()}
-            b.remove_parameters_all(context='setting', **_skip_filter_checks)
+            b.remove_parameters_all(context='setting')
             b._attach_params(_setting.settings(**existing_values_settings), context='setting')
 
             # overwriting the datasets during migration will clear the model, so
@@ -778,11 +777,11 @@ class Bundle(ParameterSet):
                         existing_values['pblum_component'] = b.filter(qualifier='pblum_ref', context='dataset', dataset=ds, check_visible=False).exclude(value='self', check_visible=False).get_parameter(check_visible=True).component
 
 
-                for qualifier in b.filter(context='dataset', dataset=ds, **_skip_filter_checks).qualifiers:
+                for qualifier in b.filter(context='dataset', dataset=ds).qualifiers:
                     if qualifier in ['pblum_ref']:
                         # already handled these above
                         continue
-                    ps = b.filter(qualifier=qualifier, context='dataset', dataset=ds, **_skip_filter_checks)
+                    ps = b.filter(qualifier=qualifier, context='dataset', dataset=ds)
                     if len(ps.to_list()) > 1:
                         existing_values[qualifier] = {}
                         for param in ps.to_list():
@@ -793,14 +792,14 @@ class Bundle(ParameterSet):
                                 existing_values['ld_mode']["{}@{}".format(param.time, param.component) if param.time is not None else param.component] = 'interp' if param.value == 'interp' else 'manual'
 
                     else:
-                        param = b.get_parameter(qualifier=qualifier, context='dataset', dataset=ds, **_skip_filter_checks)
+                        param = b.get_parameter(qualifier=qualifier, context='dataset', dataset=ds)
                         existing_values[qualifier] = existing_value(param)
                         if qualifier=='ld_func':
                             existing_values['ld_mode']["{}@{}".format(param.time, param.component) if param.time is not None else param.component] = 'interp' if param.value == 'interp' else 'manual'
 
                 if ds_kind in ['lp']:
                     # then we need to pass the times from the attribute instead of parameter
-                    existing_values['times'] = b.filter(context='dataset', dataset=ds, **_skip_filter_checks).times
+                    existing_values['times'] = b.filter(context='dataset', dataset=ds).times
 
                 existing_values['kind'] = ds_kind
 
@@ -813,8 +812,8 @@ class Bundle(ParameterSet):
                 logger.debug("applying existing values to {} dataset: {}".format(ds, existing_values))
                 b.add_dataset(ds_kind, dataset=ds, overwrite=True, **existing_values)
 
-            for component in b.filter(context='component', **_skip_filter_checks).components:
-                existing_values = {p.qualifier: p.get_value() for p in b.filter(context='component', component=component, **_skip_filter_checks).to_list()}
+            for component in b.filter(context='component').components:
+                existing_values = {p.qualifier: p.get_value() for p in b.filter(context='component', component=component).to_list()}
                 logger.warning("migrating '{}' component".format(component))
                 logger.debug("applying existing values to {} component: {}".format(component, existing_values))
                 b.add_component(kind=b.get_component(component=component, check_visible=False).kind, component=component, overwrite=True, **existing_values)
@@ -829,23 +828,23 @@ class Bundle(ParameterSet):
             warning = "importing from an older version ({}) of PHOEBE to PHOEBE 2.3+.  The previous versions did not support sample_from, etc... all compute options will be migrated to include all new options.  Additionally, extinction parameters will be moved from the dataset to system context.  This may take some time.  Please check all values.".format(phoebe_version_import)
             logger.warning(warning)
 
-            b.remove_parameters_all(qualifier='log_history', **_skip_filter_checks)
+            b.remove_parameters_all(qualifier='log_history')
 
             # new settings parameters were added for run_checks_*
             logger.warning("updating all parameters in setting context")
             existing_values_settings = {p.qualifier: p.get_value() for p in b.filter(context='setting').to_list()}
-            b.remove_parameters_all(context='setting', **_skip_filter_checks)
+            b.remove_parameters_all(context='setting')
             b._attach_params(_setting.settings(**existing_values_settings), context='setting')
 
             # new mean_anom parameter in orbits and updated descriptions in star parameters
-            for component in b.filter(context='component', **_skip_filter_checks).components:
-                existing_values = {p.qualifier: p.get_value() for p in b.filter(context='component', component=component, **_skip_filter_checks).to_list()}
+            for component in b.filter(context='component').components:
+                existing_values = {p.qualifier: p.get_value() for p in b.filter(context='component', component=component).to_list()}
                 logger.warning("migrating '{}' component".format(component))
                 logger.debug("applying existing values to {} component: {}".format(component, existing_values))
                 b.add_component(kind=b.get_component(component=component, check_visible=False).kind, component=component, overwrite=True, **existing_values)
 
             # update logg constraints (now in solar units due to bug with MPI handling converting solMass to SI)
-            for logg_constraint in b.filter(qualifier='logg', context='constraint', **_skip_filter_checks).to_list():
+            for logg_constraint in b.filter(qualifier='logg', context='constraint').to_list():
                 component = logg_constraint.component
                 logger.warning("re-creating logg constraint for component='{}' to be in solar instead of SI units".format(component))
                 b.remove_constraint(uniqueid=logg_constraint.uniqueid)
@@ -853,7 +852,7 @@ class Bundle(ParameterSet):
 
             for compute in b.filter(context='compute').computes:
                 logger.info("attempting to update compute='{}' to new version requirements".format(compute))
-                ps_compute = b.filter(context='compute', compute=compute, **_skip_filter_checks)
+                ps_compute = b.filter(context='compute', compute=compute)
                 compute_kind = ps_compute.kind
                 dict_compute = _ps_dict(ps_compute)
                 # NOTE: we will not remove (or update) the dataset from any existing models
@@ -864,7 +863,7 @@ class Bundle(ParameterSet):
             # and add mask_phases and solver_times support
             for dataset in b.filter(context='dataset').datasets:
                 logger.info("attempting to update dataset='{}' to new version requirements".format(dataset))
-                ps_ds = b.filter(context='dataset', dataset=dataset, **_skip_filter_checks)
+                ps_ds = b.filter(context='dataset', dataset=dataset)
                 ds_kind = ps_ds.kind
                 dict_ds = _ps_dict(ps_ds, include_constrained=False)
                 if 'compute_phases_t0' in dict_ds.keys():
@@ -876,19 +875,19 @@ class Bundle(ParameterSet):
             system, constraints = _system.system()
             b._attach_params([p for p in system.to_list() if p.qualifier in ['ebv', 'Av', 'Rv']], context='system')
 
-            Avs = list(set([Av_param.get_value() for Av_param in b.filter(qualifier='Av', context='dataset', **_skip_filter_checks).to_list()]))
+            Avs = list(set([Av_param.get_value() for Av_param in b.filter(qualifier='Av', context='dataset').to_list()]))
             if len(Avs):
                 if len(Avs) > 1:
                     logger.warning("PHOEBE no longer supports multiple values for Av, adopting Av={}".format(Avs[0]))
-                b.set_value(qualifier='Av', context='system', value=Avs[0], **_skip_filter_checks)
-            Rvs = list(set([Rv_param.get_value() for Rv_param in b.filter(qualifier='Rv', context='dataset', **_skip_filter_checks).to_list()]))
+                b.set_value(qualifier='Av', context='system', value=Avs[0])
+            Rvs = list(set([Rv_param.get_value() for Rv_param in b.filter(qualifier='Rv', context='dataset').to_list()]))
             if len(Rvs):
                 if len(Rvs) > 1:
                     logger.warning("PHOEBE no longer supports multiple values for Rv, adopting Rv={}".format(Rvs[0]))
-                b.set_value(qualifier='Rv', context='system', value=Rvs[0], **_skip_filter_checks)
+                b.set_value(qualifier='Rv', context='system', value=Rvs[0])
 
-            b.remove_parameters_all(qualifier=['ebv', 'Av', 'Rv'], context='dataset', **_skip_filter_checks)
-            b.remove_parameters_all(constraint_func='extinction', context='constraint', **_skip_filter_checks)
+            b.remove_parameters_all(qualifier=['ebv', 'Av', 'Rv'], context='dataset')
+            b.remove_parameters_all(constraint_func='extinction', context='constraint')
 
             for constraint in constraints:
                 # there were no constraints before in the system context
@@ -908,12 +907,12 @@ class Bundle(ParameterSet):
             logger.warning(warning)
 
             existing_values_settings = {p.qualifier: p.get_value() for p in b.filter(context='setting').to_list()}
-            b.remove_parameters_all(context='setting', **_skip_filter_checks)
+            b.remove_parameters_all(context='setting')
             b._attach_params(_setting.settings(**existing_values_settings), context='setting')
 
-            for compute in b.filter(context='compute', **_skip_filter_checks).computes:
+            for compute in b.filter(context='compute').computes:
                 logger.info("attempting to update compute='{}' to new version requirements".format(compute))
-                ps_compute = b.filter(context='compute', compute=compute, **_skip_filter_checks)
+                ps_compute = b.filter(context='compute', compute=compute)
                 compute_kind = ps_compute.kind
                 dict_compute = _ps_dict(ps_compute)
                 # NOTE: we will not remove (or update) the dataset from any existing models
@@ -923,14 +922,14 @@ class Bundle(ParameterSet):
                 # dict_compute didn't account for per-dataset values for enabled
                 for param in ps_compute.to_list():
                     if param.component is None and param.dataset is None: continue
-                    b.set_value(qualifier=param.qualifier, compute=compute, dataset=param.dataset, component=param.component, value=param.get_value(), **_skip_filter_checks)
+                    b.set_value(qualifier=param.qualifier, compute=compute, dataset=param.dataset, component=param.component, value=param.get_value())
 
             # just in case the values aren't valid (for continue_from, etc), let's update
             b._handle_solution_choiceparams()
             b._handle_solution_selectparams()
-            for feature in b.filter(context='feature', kind='gaussian_process', **_skip_filter_checks).features:
+            for feature in b.filter(context='feature', kind='gaussian_process').features:
                 logger.info("attempting to update feature='{}' to new version requirements using gp_celerite2".format(feature))
-                ps_gp = b.filter(context='feature', feature=feature, **_skip_filter_checks)
+                ps_gp = b.filter(context='feature', feature=feature)
                 dict_feature = _ps_dict(ps_gp)
                 kernel = ps_gp.get_value(qualifier='kernel')
                 if kernel == 'sho':
@@ -947,9 +946,9 @@ class Bundle(ParameterSet):
                 b.remove_feature(feature, context=['feature'])
                 b.add_feature('gp_celerite2', dataset=ps_gp.dataset, feature=feature, check_label=False, overwrite=True, **dict_feature)
 
-            for solver in b.filter(context='solver', **_skip_filter_checks).solvers:
+            for solver in b.filter(context='solver').solvers:
                 logger.info("attempting to update solver='{}' to new version requirements".format(solver))
-                ps_solver = b.filter(context='solver', solver=solver, **_skip_filter_checks)
+                ps_solver = b.filter(context='solver', solver=solver)
                 solver_kind = ps_solver.kind
                 dict_solver = _ps_dict(ps_solver)
                 if solver_kind == 'ebai':
@@ -957,12 +956,12 @@ class Bundle(ParameterSet):
                 b.remove_solver(solver, context=['solver'])
                 b.add_solver(solver_kind, solver=solver, check_label=False, overwrite=True, **dict_solver)
 
-            for solution in b.filter(context='solution', kind='emcee', **_skip_filter_checks).solutions:
+            for solution in b.filter(context='solution', kind='emcee').solutions:
                 solution_ps = b.get_solution(solution=solution)
                 if 'nlags' not in solution_ps.qualifiers:
-                    burnin = solution_ps.get_value(qualifier='burnin', **_skip_filter_checks)
-                    niters = solution_ps.get_value(qualifier='niters', **_skip_filter_checks)
-                    autocorr_times = solution_ps.get_value(qualifier='autocorr_times', **_skip_filter_checks)
+                    burnin = solution_ps.get_value(qualifier='burnin')
+                    niters = solution_ps.get_value(qualifier='niters')
+                    autocorr_times = solution_ps.get_value(qualifier='autocorr_times')
                     nlags_default = 3 * np.nanmax(autocorr_times)
                     if np.isnan(nlags_default) or nlags_default > niters-burnin:
                         nlags_default = niters-burnin
@@ -972,7 +971,7 @@ class Bundle(ParameterSet):
 
         if phoebe_version_import < parse("2.4.4"):
             # update mass constraints
-            for constraint in b.filter(constraint_func=['mass', 'requivsumfrac', 'requivratio'], context='constraint', **_skip_filter_checks).to_list():
+            for constraint in b.filter(constraint_func=['mass', 'requivsumfrac', 'requivratio'], context='constraint').to_list():
                 logger.warning("re-creating {} constraint".format(constraint.twig))
                 solved_for = constraint.get_constrained_parameter()
                 b.remove_constraint(uniqueid=constraint.uniqueid)
@@ -984,20 +983,20 @@ class Bundle(ParameterSet):
             warning = "importing from an older version ({}) of PHOEBE to PHOEBE 2.5+.  This may take some time.  Please check all values.".format(phoebe_version_import)
             logger.warning(warning)
             # migrate rv_offset@dataset to new feature implementation, if non-zero
-            for rv_ds in b.filter(context='dataset', kind='rv', **_skip_filter_checks).datasets:
-                rv_offsets = [param.get_value() for param in b.filter(qualifier='rv_offset', dataset=rv_ds, context='dataset', **_skip_filter_checks).to_list()]
+            for rv_ds in b.filter(context='dataset', kind='rv').datasets:
+                rv_offsets = [param.get_value() for param in b.filter(qualifier='rv_offset', dataset=rv_ds, context='dataset').to_list()]
                 if np.any(rv_offsets != 0):
                     logger.warning(f"migrating rv_offset@{rv_ds}@dataset to new features implementation")
                     b.add_feature('rv_offset', dataset=rv_ds)
                     for comp in b.hierarchy.get_stars():
                         b.set_value(qualifier='rv_offset', component=comp, context='feature', value=b.get_quantity(qualifier='rv_offset', component=comp, context='dataset'))
                     # delete original rv_offset parameters
-                    b.remove_parameters_all(qualifier='rv_offset', context='dataset', **_skip_filter_checks)
+                    b.remove_parameters_all(qualifier='rv_offset', context='dataset')
 
             # update all datasets to get boosting_method/index parameters
-            for dataset in b.filter(qualifier='passband', context='dataset', **_skip_filter_checks).datasets:
+            for dataset in b.filter(qualifier='passband', context='dataset').datasets:
                 logger.info("attempting to update dataset='{}' to new version requirements".format(dataset))
-                ps_ds = b.filter(context='dataset', dataset=dataset, **_skip_filter_checks)
+                ps_ds = b.filter(context='dataset', dataset=dataset)
                 ds_kind = ps_ds.kind
                 dict_ds = _ps_dict(ps_ds, include_constrained=False)
                 b.remove_dataset(dataset, context=['dataset', 'constraint'])
@@ -1393,7 +1392,7 @@ class Bundle(ParameterSet):
         system, pblums_abs, pblums_scale, pblums_rel, pbfluxes = self.compute_pblums(compute=compute, ret_structured_dicts=True, skip_checks=True, **{k:v for k,v in kwargs.items() if k in computeparams.qualifiers})
         # l3s = self.compute_l3s(compute=compute, use_pbfluxes=pbfluxes, ret_structured_dicts=True, skip_checks=True, skip_compute_ld_coeffs=True, **{k:v for k,v in kwargs.items() if k in computeparams.qualifiers})
 
-        dataset_this_compute = computeparams.filter(qualifier='enabled', value=True, **_skip_filter_checks).datasets
+        dataset_this_compute = computeparams.filter(qualifier='enabled', value=True).datasets
 
         return backends.EllcBackend().export(self, filename, compute, pblums=pblums_rel, dataset=dataset_this_compute, times=None)
 
@@ -1449,8 +1448,7 @@ class Bundle(ParameterSet):
                                       time=time,
                                       model=model,
                                       component=component,
-                                      context='model',
-                                      **_skip_filter_checks)
+                                      context='model')
 
         if format == 'obj':
             f = open(filename, 'w')
@@ -1585,7 +1583,7 @@ class Bundle(ParameterSet):
 
         if len(resp.get('removed_parameters', [])):
             # print("*** removed_parameters", resp.get('removed_parameters'))
-            server_changes += self.remove_parameters_all(uniqueid=resp.get('removed_parameters'), **_skip_filter_checks)
+            server_changes += self.remove_parameters_all(uniqueid=resp.get('removed_parameters'))
 
         if requestid == self._waiting_on_server:
             self._waiting_on_server = False
@@ -1982,25 +1980,23 @@ class Bundle(ParameterSet):
         affected_params = []
         changed_param = self.run_delayed_constraints()
 
-        dss_ps = self.filter(context='dataset', **_skip_filter_checks)
+        dss_ps = self.filter(context='dataset')
 
-        pbdep_datasets = dss_ps.filter(kind=_dataset._pbdep_columns.keys(),
-                                       **_skip_filter_checks).datasets
+        pbdep_datasets = dss_ps.filter(kind=_dataset._pbdep_columns.keys()).datasets
 
         pbdep_columns = _dataset._mesh_columns[:] # force deepcopy
         for pbdep_dataset in pbdep_datasets:
             pbdep_kind = dss_ps.filter(dataset=pbdep_dataset,
-                                       kind=_dataset._pbdep_columns.keys(),
-                                       **_skip_filter_checks).kind
+                                       kind=_dataset._pbdep_columns.keys()).kind
 
             pbdep_columns += ["{}@{}".format(column, pbdep_dataset) for column in _dataset._pbdep_columns[pbdep_kind]]
 
         time_datasets = dss_ps.exclude(kind='mesh').datasets
 
-        t0s = ["{}@{}".format(p.qualifier, p.component) for p in self.filter(qualifier='t0*', context=['component'], **_skip_filter_checks).to_list()]
+        t0s = ["{}@{}".format(p.qualifier, p.component) for p in self.filter(qualifier='t0*', context=['component']).to_list()]
         t0s += ["t0@system"]
 
-        for param in dss_ps.filter(qualifier='columns', **_skip_filter_checks).to_list():
+        for param in dss_ps.filter(qualifier='columns').to_list():
             choices_changed = False
             if return_changes and pbdep_columns != param._choices:
                 choices_changed = True
@@ -2009,7 +2005,7 @@ class Bundle(ParameterSet):
             if return_changes and (changed or choices_changed):
                 affected_params.append(param)
 
-        for param in dss_ps.filter(qualifier='include_times', **_skip_filter_checks).to_list():
+        for param in dss_ps.filter(qualifier='include_times').to_list():
 
             # NOTE: existing value is updated in change_component
             choices_changed = False
@@ -2020,7 +2016,7 @@ class Bundle(ParameterSet):
             if return_changes and (changed or choices_changed):
                 affected_params.append(param)
 
-        for param in self.filter(context='figure', qualifier='datasets', **_skip_filter_checks).to_list():
+        for param in self.filter(context='figure', qualifier='datasets').to_list():
             ds_same_kind = self.filter(context='dataset', kind=param.kind).datasets
 
             choices_changed = False
@@ -2031,8 +2027,8 @@ class Bundle(ParameterSet):
             if return_changes and (changed or choices_changed):
                 affected_params.append(param)
 
-        lcchoices = self.filter(context='dataset', kind='lc', **_skip_filter_checks).datasets
-        for param in self.filter(qualifier='lc_datasets', **_skip_filter_checks).to_list():
+        lcchoices = self.filter(context='dataset', kind='lc').datasets
+        for param in self.filter(qualifier='lc_datasets').to_list():
             choices_changed = False
             if return_changes and lcchoices != param._choices:
                 choices_changed = True
@@ -2041,8 +2037,8 @@ class Bundle(ParameterSet):
             if return_changes and (changed or choices_changed):
                 affected_params.append(param)
 
-        rvchoices = self.filter(context='dataset', kind='rv', **_skip_filter_checks).datasets
-        for param in self.filter(qualifier='rv_datasets', **_skip_filter_checks).to_list():
+        rvchoices = self.filter(context='dataset', kind='rv').datasets
+        for param in self.filter(qualifier='rv_datasets').to_list():
             choices_changed = False
             if return_changes and rvchoices != param._choices:
                 choices_changed = True
@@ -2056,24 +2052,24 @@ class Bundle(ParameterSet):
     def _handle_figure_time_source_params(self, rename={}, return_changes=False):
         affected_params = []
 
-        t0s = ["{}@{}".format(p.qualifier, p.component) for p in self.filter(qualifier='t0*', context=['component'], **_skip_filter_checks).to_list()]
+        t0s = ["{}@{}".format(p.qualifier, p.component) for p in self.filter(qualifier='t0*', context=['component']).to_list()]
         t0s += ["t0@system"]
 
         # here we have to use context='dataset' otherwise pb-dependent parameters
         # with context='model', kind='mesh' will show up
-        valid_datasets = self.filter(context='dataset', kind=['mesh', 'lp'], **_skip_filter_checks).datasets
+        valid_datasets = self.filter(context='dataset', kind=['mesh', 'lp']).datasets
 
         mesh_times = []
         lp_times = []
         mesh_lp_times = []
         for t in self.filter(context='model', kind='mesh').times:
-            mesh_times.append('{} ({})'.format(t, ', '.join(ds for ds in self.filter(context='model', time=t, **_skip_filter_checks).datasets if ds in valid_datasets)))
+            mesh_times.append('{} ({})'.format(t, ', '.join(ds for ds in self.filter(context='model', time=t).datasets if ds in valid_datasets)))
         for t in self.filter(context='model', kind='lp').times:
-            lp_times.append('{} ({})'.format(t, ', '.join(ds for ds in self.filter(context='model', time=t, **_skip_filter_checks).datasets if ds in valid_datasets)))
+            lp_times.append('{} ({})'.format(t, ', '.join(ds for ds in self.filter(context='model', time=t).datasets if ds in valid_datasets)))
         for t in self.filter(context='model').times:
-            mesh_lp_times.append('{} ({})'.format(t, ', '.join(ds for ds in self.filter(context='model', time=t, **_skip_filter_checks).datasets if ds in valid_datasets)))
+            mesh_lp_times.append('{} ({})'.format(t, ', '.join(ds for ds in self.filter(context='model', time=t).datasets if ds in valid_datasets)))
 
-        for param in self.filter(context='figure', qualifier=['default_time_source', 'time_source'], **_skip_filter_checks).to_list():
+        for param in self.filter(context='figure', qualifier=['default_time_source', 'time_source']).to_list():
 
 
             if param.qualifier == 'default_time_source':
@@ -2119,9 +2115,9 @@ class Bundle(ParameterSet):
         affected_params = []
         changed_params = self.run_delayed_constraints()
 
-        servers = self.filter(context='server', **_skip_filter_checks).servers
+        servers = self.filter(context='server').servers
 
-        for param in self.filter(context='setting', qualifier='run_checks_server', **_skip_filter_checks).to_list():
+        for param in self.filter(context='setting', qualifier='run_checks_server').to_list():
             choices_changed = False
             if return_changes and servers != param._choices:
                 choices_changed = True
@@ -2131,7 +2127,7 @@ class Bundle(ParameterSet):
             if return_changes and (changed or choices_changed):
                 affected_params.append(param)
 
-        for param in self.filter(context=['compute', 'solver'], qualifier='use_server', **_skip_filter_checks).to_list():
+        for param in self.filter(context=['compute', 'solver'], qualifier='use_server').to_list():
             if 'compute' in param.choices:
                 choices = ['none', 'compute'] + servers
             else:
@@ -2159,9 +2155,9 @@ class Bundle(ParameterSet):
         affected_params = []
         changed_params = self.run_delayed_constraints()
 
-        figures = self.filter(context='figure', **_skip_filter_checks).figures
+        figures = self.filter(context='figure').figures
 
-        for param in self.filter(qualifier='run_checks_figure', **_skip_filter_checks).to_list():
+        for param in self.filter(qualifier='run_checks_figure').to_list():
             choices_changed = False
             if return_changes and figures != param._choices:
                 choices_changed = True
@@ -2176,9 +2172,9 @@ class Bundle(ParameterSet):
     def _handle_compute_choiceparams(self, return_changes=False):
         affected_params = []
 
-        choices = self.filter(context='compute', **_skip_filter_checks).computes
+        choices = self.filter(context='compute').computes
 
-        for param in self.filter(qualifier='compute', context='solver', **_skip_filter_checks).to_list():
+        for param in self.filter(qualifier='compute', context='solver').to_list():
             choices_changed = False
             if return_changes and choices != param._choices:
                 choices_changed = True
@@ -2205,9 +2201,9 @@ class Bundle(ParameterSet):
         affected_params = []
         changed_params = self.run_delayed_constraints()
 
-        computes = self.filter(context='compute', **_skip_filter_checks).computes
+        computes = self.filter(context='compute').computes
 
-        for param in self.filter(qualifier='run_checks_compute', **_skip_filter_checks).to_list():
+        for param in self.filter(qualifier='run_checks_compute').to_list():
             choices_changed = False
             if return_changes and computes != param._choices:
                 choices_changed = True
@@ -2273,15 +2269,15 @@ class Bundle(ParameterSet):
 
         # we'll cheat by checking in the dataset context to avoid getting the
         # pb-dependent entries with kind='mesh'
-        mesh_datasets = self.filter(context='dataset', kind='mesh', **_skip_filter_checks).datasets
+        mesh_datasets = self.filter(context='dataset', kind='mesh').datasets
 
         choices = ['None']
-        for p in self.filter(context='model', kind='mesh', **_skip_filter_checks).exclude(qualifier=ignore, **_skip_filter_checks).to_list():
+        for p in self.filter(context='model', kind='mesh').exclude(qualifier=ignore).to_list():
             item = p.qualifier if p.dataset in mesh_datasets else '{}@{}'.format(p.qualifier, p.dataset)
             if item not in choices:
                 choices.append(item)
 
-        for param in self.filter(context='figure', qualifier=['fc_column', 'ec_column'], **_skip_filter_checks).to_list():
+        for param in self.filter(context='figure', qualifier=['fc_column', 'ec_column']).to_list():
             choices_changed = False
             if return_changes and choices != param._choices:
                 choices_changed = True
@@ -2306,9 +2302,9 @@ class Bundle(ParameterSet):
         choices = self.distributions
 
         # NOTE: sample_from@compute currently handled in _handle_computesamplefrom_selectparams
-        params = self.filter(context='solver', qualifier=['init_from', 'priors', 'bounds', 'sample_from'], **_skip_filter_checks).to_list()
+        params = self.filter(context='solver', qualifier=['init_from', 'priors', 'bounds', 'sample_from']).to_list()
         distribution_set_choices = ['manual'] + ['{}@{}'.format(p.qualifier, getattr(p, p.context)) for p in params]
-        params += self.filter(context='figure', kind='distribution_collection', qualifier='distributions', **_skip_filter_checks).to_list()
+        params += self.filter(context='figure', kind='distribution_collection', qualifier='distributions').to_list()
 
         for param in params:
             choices_changed = False
@@ -2320,7 +2316,7 @@ class Bundle(ParameterSet):
             if return_changes and (changed or choices_changed):
                 affected_params.append(param)
 
-        for param in self.filter(context='figure', kind='distribution_collection', qualifier='distribution_set', **_skip_filter_checks).to_list():
+        for param in self.filter(context='figure', kind='distribution_collection', qualifier='distribution_set').to_list():
             # NOTE: these are technically ChoiceParameters
             choices_changed = False
             if return_changes and distribution_set_choices != param._choices:
@@ -2345,7 +2341,7 @@ class Bundle(ParameterSet):
 
         choices = self.distributions + self.solutions
 
-        for param in self.filter(context='compute', qualifier=['sample_from'], **_skip_filter_checks).to_list():
+        for param in self.filter(context='compute', qualifier=['sample_from']).to_list():
             choices_changed = False
             if return_changes and choices != param._choices:
                 choices_changed = True
@@ -2360,7 +2356,7 @@ class Bundle(ParameterSet):
     def _handle_fitparameters_selecttwigparams(self, rename={}, return_changes=False):
         affected_params = []
 
-        params = self.filter(context='solver', qualifier=['fit_parameters'], **_skip_filter_checks).to_list()
+        params = self.filter(context='solver', qualifier=['fit_parameters']).to_list()
         if not len(params):
             return affected_params
 
@@ -2390,9 +2386,9 @@ class Bundle(ParameterSet):
     def _handle_orbit_choiceparams(self, return_changes=False):
         affected_params = []
 
-        choices = self.filter(context='component', kind='orbit', **_skip_filter_checks).components
+        choices = self.filter(context='component', kind='orbit').components
 
-        for param in self.filter(qualifier='orbit', context='solver', **_skip_filter_checks).to_list():
+        for param in self.filter(qualifier='orbit', context='solver').to_list():
             choices_changed = False
             if return_changes and choices != param._choices:
                 choices_changed = True
@@ -2416,9 +2412,9 @@ class Bundle(ParameterSet):
         affected_params = []
 
         # currently assuming we want a component with period (which is the case for lc_periodogram component parameter)
-        choices = self.filter(context='component', qualifier='period', **_skip_filter_checks).components
+        choices = self.filter(context='component', qualifier='period').components
 
-        for param in self.filter(qualifier='component', context='solver', **_skip_filter_checks).to_list():
+        for param in self.filter(qualifier='component', context='solver').to_list():
             choices_changed = False
             if return_changes and choices != param._choices:
                 choices_changed = True
@@ -2438,8 +2434,8 @@ class Bundle(ParameterSet):
     def _handle_solution_choiceparams(self, return_changes=False):
         affected_params = []
 
-        for param in self.filter(qualifier='continue_from', context='solver', **_skip_filter_checks).to_list():
-            choices = ['None'] + self.filter(context='solution', kind=param.kind, **_skip_filter_checks).solutions
+        for param in self.filter(qualifier='continue_from', context='solver').to_list():
+            choices = ['None'] + self.filter(context='solution', kind=param.kind).solutions
 
             choices_changed = False
             if return_changes and choices != param._choices:
@@ -2458,8 +2454,8 @@ class Bundle(ParameterSet):
             if return_changes and (changed or choices_changed):
                 affected_params.append(param)
 
-        for param in self.filter(qualifier='solution', context='figure', **_skip_filter_checks).to_list():
-            choices = self.filter(context='solution', kind=param.kind, **_skip_filter_checks).solutions
+        for param in self.filter(qualifier='solution', context='figure').to_list():
+            choices = self.filter(context='solution', kind=param.kind).solutions
 
             choices_changed = False
             if return_changes and choices != param._choices:
@@ -2485,9 +2481,9 @@ class Bundle(ParameterSet):
         """
         affected_params = []
 
-        solutions = self.filter(context='solution', **_skip_filter_checks).solutions
+        solutions = self.filter(context='solution').solutions
 
-        for param in self.filter(qualifier='run_checks_solution', **_skip_filter_checks).to_list():
+        for param in self.filter(qualifier='run_checks_solution').to_list():
             choices_changed = False
             if return_changes and solutions != param._choices:
                 choices_changed = True
@@ -2502,8 +2498,8 @@ class Bundle(ParameterSet):
     def _handle_solver_choiceparams(self, return_changes=False):
         affected_params = []
 
-        for param in self.filter(qualifier='solver', context='figure', **_skip_filter_checks).to_list():
-            choices = self.filter(context='solver', kind=param.kind, **_skip_filter_checks).solvers
+        for param in self.filter(qualifier='solver', context='figure').to_list():
+            choices = self.filter(context='solver', kind=param.kind).solvers
 
             choices_changed = False
             if return_changes and choices != param._choices:
@@ -2529,9 +2525,9 @@ class Bundle(ParameterSet):
         """
         affected_params = []
 
-        solvers = self.filter(context='solver', **_skip_filter_checks).solvers
+        solvers = self.filter(context='solver').solvers
 
-        for param in self.filter(qualifier='run_checks_solver', **_skip_filter_checks).to_list():
+        for param in self.filter(qualifier='run_checks_solver').to_list():
             choices_changed = False
             if return_changes and solvers != param._choices:
                 choices_changed = True
@@ -2621,24 +2617,23 @@ class Bundle(ParameterSet):
 
         # user_interactive_constraints = conf.interactive_constraints
         # conf.interactive_constraints_off()
-        for component in [env for env in self.filter(kind='envelope', **_skip_filter_checks).components if env not in hier_envelopes]:
-            for constraint_param in self.filter(context='constraint', component=component, **_skip_filter_checks).to_list():
+        for component in [env for env in self.filter(kind='envelope').components if env not in hier_envelopes]:
+            for constraint_param in self.filter(context='constraint', component=component).to_list():
                 logger.debug("removing {} constraint (envelope no longer in hierarchy)".format(constraint_param.twig))
-                self.remove_constraint(constraint_func=constraint_param.constraint_func, component=component, **_skip_filter_checks)
+                self.remove_constraint(constraint_func=constraint_param.constraint_func, component=component)
 
         for component in hier_envelopes:
             # we need two of the three [comp_env] + self.hierarchy.get_siblings_of(comp_env) to have constraints
             logger.debug('re-creating requiv constraints')
             existing_requiv_constraints = self.filter(constraint_func='requiv_to_pot',
-                                                      component=[component]+self.hierarchy.get_siblings_of(component),
-                                                      **_skip_filter_checks)
+                                                      component=[component]+self.hierarchy.get_siblings_of(component))
             if len(existing_requiv_constraints) == 2:
                 # do we need to rebuild these?
                 continue
             elif len(existing_requiv_constraints)==0:
                 for component_requiv in self.hierarchy.get_siblings_of(component):
-                    pot_parameter = self.get_parameter(qualifier='pot', component=self.hierarchy.get_envelope_of(component_requiv), context='component', **_skip_filter_checks)
-                    requiv_parameter = self.get_parameter(qualifier='requiv', component=component_requiv, context='component', **_skip_filter_checks)
+                    pot_parameter = self.get_parameter(qualifier='pot', component=self.hierarchy.get_envelope_of(component_requiv), context='component')
+                    requiv_parameter = self.get_parameter(qualifier='requiv', component=component_requiv, context='component')
                     if len(pot_parameter.constrained_by):
                         solve_for = requiv_parameter.uniquetwig
                     else:
@@ -3276,7 +3271,7 @@ class Bundle(ParameterSet):
 
         for component in hier_stars:
             kind = hier.get_kind_of(component) # shouldn't this always be 'star'?
-            comp_ps = self.get_component(component=component, **_skip_filter_checks)
+            comp_ps = self.get_component(component=component)
 
             if not len(comp_ps):
                 report.add_item(b,
@@ -3285,9 +3280,9 @@ class Bundle(ParameterSet):
                                 True, ['system', 'run_compute'])
 
             parent = hier.get_parent_of(component)
-            parent_ps = self.get_component(component=parent, **_skip_filter_checks)
+            parent_ps = self.get_component(component=parent)
             if kind in ['star']:
-                if self.get_value(qualifier='teff', component=component, context='component', unit=u.K, **_skip_filter_checks) >= 10000 and self.get_value(qualifier='ld_mode_bol', component=component, context='component', **_skip_filter_checks) == 'lookup':
+                if self.get_value(qualifier='teff', component=component, context='component', unit=u.K) >= 10000 and self.get_value(qualifier='ld_mode_bol', component=component, context='component') == 'lookup':
                     report.add_item(self,
                                     "ld_mode_bol of 'lookup' uses a bolometric passband which is not reliable for hot stars.  Consider using ld_mode_bol of manual and providing ld_coeffs instead.",
                                     [self.get_parameter(qualifier='teff', component=component, context='component'),
@@ -3297,35 +3292,35 @@ class Bundle(ParameterSet):
 
                 # contact systems MUST by synchronous
                 if hier.is_contact_binary(component):
-                    if self.get_value(qualifier='syncpar', component=component, context='component', **_skip_filter_checks) != 1.0:
+                    if self.get_value(qualifier='syncpar', component=component, context='component') != 1.0:
                         report.add_item(self,
                                         "contact binaries must be synchronous, but syncpar@{}!=1".format(component),
-                                        [self.get_parameter(qualifier='syncpar', component=component, context='component', **_skip_filter_checks)],
+                                        [self.get_parameter(qualifier='syncpar', component=component, context='component')],
                                         True, ['system', 'run_compute'])
 
-                    if self.get_value(qualifier='ecc', component=parent, context='component', **_skip_filter_checks) != 0.0:
+                    if self.get_value(qualifier='ecc', component=parent, context='component') != 0.0:
                         # TODO: this can result in duplicate entries in the report
                         report.add_item(self,
                                         "contact binaries must be circular, but ecc@{}!=0".format(parent),
-                                        [self.get_parameter(qualifier='ecc', component=parent, context='component', **_skip_filter_checks)],
+                                        [self.get_parameter(qualifier='ecc', component=parent, context='component')],
                                         True, ['system', 'run_compute'])
 
-                    if self.get_value(qualifier='pitch', component=component, context='component', **_skip_filter_checks) != 0.0:
+                    if self.get_value(qualifier='pitch', component=component, context='component') != 0.0:
                         report.add_item(self,
                                         'contact binaries must be aligned, but pitch@{}!=0.  Try b.set_value(qualifier=\'pitch\', component=\'{}\' value=0.0, check_visible=False) to align.'.format(component, component),
-                                        [self.get_parameter(qualifier='pitch', component=component, context='component', **_skip_filter_checks)],
+                                        [self.get_parameter(qualifier='pitch', component=component, context='component')],
                                         True, ['system', 'run_compute'])
 
-                    if self.get_value(qualifier='yaw', component=component, context='component', **_skip_filter_checks) != 0.0:
+                    if self.get_value(qualifier='yaw', component=component, context='component') != 0.0:
                         report.add_item(self,
                                         'contact binaries must be aligned, but yaw@{}!=0.  Try b.set_value(qualifier=\'yaw\', component=\'{}\', value=0.0, check_visible=False) to align.'.format(component, component),
-                                        [self.get_parameter(qualifier='yaw', component=component, context='component', **_skip_filter_checks)],
+                                        [self.get_parameter(qualifier='yaw', component=component, context='component')],
                                         True, ['system', 'run_compute'])
 
                 # MUST NOT be overflowing at PERIASTRON (d=1-ecc, etheta=0)
 
-                requiv = comp_ps.get_value(qualifier='requiv', unit=u.solRad, **_skip_filter_checks)
-                requiv_max = comp_ps.get_value(qualifier='requiv_max', unit=u.solRad, **_skip_filter_checks)
+                requiv = comp_ps.get_value(qualifier='requiv', unit=u.solRad)
+                requiv_max = comp_ps.get_value(qualifier='requiv_max', unit=u.solRad)
 
 
 
@@ -3335,39 +3330,39 @@ class Bundle(ParameterSet):
                     if np.isnan(requiv) or requiv > requiv_max:
                         report.add_item(self,
                                         '{} is overflowing at L2/L3 (requiv={}, requiv_min={}, requiv_max={})'.format(component, requiv, requiv_min, requiv_max),
-                                        [comp_ps.get_parameter(qualifier='requiv', **_skip_filter_checks),
-                                         comp_ps.get_parameter(qualifier='requiv_max', **_skip_filter_checks),
-                                         parent_ps.get_parameter(qualifier='sma', **_skip_filter_checks)],
+                                        [comp_ps.get_parameter(qualifier='requiv'),
+                                         comp_ps.get_parameter(qualifier='requiv_max'),
+                                         parent_ps.get_parameter(qualifier='sma')],
                                         True, ['system', 'run_compute'])
 
                     if np.isnan(requiv) or requiv <= requiv_min:
                         report.add_item(self,
                                         '{} is underflowing at L1 and not a contact system (requiv={}, requiv_min={}, requiv_max={})'.format(component, requiv, requiv_min, requiv_max),
-                                        [comp_ps.get_parameter(qualifier='requiv', **_skip_filter_checks),
-                                         comp_ps.get_parameter(qualifier='requiv_min', **_skip_filter_checks),
-                                         parent_ps.get_parameter(qualifier='sma', **_skip_filter_checks)],
+                                        [comp_ps.get_parameter(qualifier='requiv'),
+                                         comp_ps.get_parameter(qualifier='requiv_min'),
+                                         parent_ps.get_parameter(qualifier='sma')],
                                         True, ['system', 'run_compute'])
 
                     elif requiv <= requiv_min * 1.001:
                         report.add_item(self,
                                         'requiv@{} is too close to requiv_min (within 0.1% of critical).  Use detached/semidetached model instead.'.format(component),
-                                        [comp_ps.get_parameter(qualifier='requiv', **_skip_filter_checks),
-                                         comp_ps.get_parameter(qualifier='requiv_min', **_skip_filter_checks),
-                                         parent_ps.get_parameter(qualifier='sma', **_skip_filter_checks),
+                                        [comp_ps.get_parameter(qualifier='requiv'),
+                                         comp_ps.get_parameter(qualifier='requiv_min'),
+                                         parent_ps.get_parameter(qualifier='sma'),
                                          hier],
                                         True, ['system', 'run_compute'])
 
                 else:
                     if requiv > requiv_max:
                         if parent:
-                            params = [comp_ps.get_parameter(qualifier='requiv', **_skip_filter_checks),
-                                     comp_ps.get_parameter(qualifier='requiv_max', **_skip_filter_checks),
-                                     parent_ps.get_parameter(qualifier='sma', **_skip_filter_checks)]
+                            params = [comp_ps.get_parameter(qualifier='requiv'),
+                                     comp_ps.get_parameter(qualifier='requiv_max'),
+                                     parent_ps.get_parameter(qualifier='sma')]
 
-                            if parent_ps.get_value(qualifier='ecc', **_skip_filter_checks) > 0.0:
-                                params += [parent_ps.get_parameter(qualifier='ecc', **_skip_filter_checks)]
+                            if parent_ps.get_value(qualifier='ecc') > 0.0:
+                                params += [parent_ps.get_parameter(qualifier='ecc')]
 
-                            if len(self.filter(kind='envelope', context='component', **_skip_filter_checks)):
+                            if len(self.filter(kind='envelope', context='component')):
                                 params += [hier]
 
                             report.add_item(self,
@@ -3375,7 +3370,7 @@ class Bundle(ParameterSet):
                                             params,
                                             True, ['system', 'run_compute'])
                         else:
-                            params = comp_ps.filter(qualifier=['requiv', 'requiv_max', 'mass', 'period'], **_skip_filter_checks)
+                            params = comp_ps.filter(qualifier=['requiv', 'requiv_max', 'mass', 'period'])
 
                             report.add_item(self,
                                             '{} is beyond critical rotation (requiv={}, requiv_max={}).'.format(component, requiv, requiv_max),
@@ -3390,17 +3385,17 @@ class Bundle(ParameterSet):
         # TODO: rewrite overlap checks
         for orbitref in []: #hier.get_orbits():
             if len(hier.get_children_of(orbitref)) == 2:
-                q = self.get_value(qualifier='q', component=orbitref, context='component', **_skip_filter_checks)
-                ecc = self.get_value(qualifier='ecc', component=orbitref, context='component', **_skip_filter_checks)
+                q = self.get_value(qualifier='q', component=orbitref, context='component')
+                ecc = self.get_value(qualifier='ecc', component=orbitref, context='component')
 
                 starrefs = hier.get_children_of(orbitref)
                 if hier.get_kind_of(starrefs[0]) != 'star' or hier.get_kind_of(starrefs[1]) != 'star':
                     # print "***", hier.get_kind_of(starrefs[0]), hier.get_kind_of(starrefs[1])
                     continue
-                if self.get_value(qualifier='pitch', component=starrefs[0], **_skip_filter_checks)!=0.0 or \
-                        self.get_value(qualifier='pitch', component=starrefs[1], **_skip_filter_checks)!=0.0 or \
-                        self.get_value(qualifier='yaw', component=starrefs[0], **_skip_filter_checks)!=0.0 or \
-                        self.get_value(qualifier='yaw', component=starrefs[1], **_skip_filter_checks)!=0.0:
+                if self.get_value(qualifier='pitch', component=starrefs[0])!=0.0 or \
+                        self.get_value(qualifier='pitch', component=starrefs[1])!=0.0 or \
+                        self.get_value(qualifier='yaw', component=starrefs[0])!=0.0 or \
+                        self.get_value(qualifier='yaw', component=starrefs[1])!=0.0:
 
                     # we cannot run this test for misaligned cases
                    continue
@@ -3410,13 +3405,13 @@ class Bundle(ParameterSet):
                 q0 = roche.q_for_component(q, comp0)
                 q1 = roche.q_for_component(q, comp1)
 
-                F0 = self.get_value(qualifier='syncpar', component=starrefs[0], context='component', **_skip_filter_checks)
-                F1 = self.get_value(qualifier='syncpar', component=starrefs[1], context='component', **_skip_filter_checks)
+                F0 = self.get_value(qualifier='syncpar', component=starrefs[0], context='component')
+                F1 = self.get_value(qualifier='syncpar', component=starrefs[1], context='component')
 
-                pot0 = self.get_value(qualifier='pot', component=starrefs[0], context='component', **_skip_filter_checks)
+                pot0 = self.get_value(qualifier='pot', component=starrefs[0], context='component')
                 pot0 = roche.pot_for_component(pot0, q0, comp0)
 
-                pot1 = self.get_value(qualifier='pot', component=starrefs[1], context='component', **_skip_filter_checks)
+                pot1 = self.get_value(qualifier='pot', component=starrefs[1], context='component')
                 pot1 = roche.pot_for_component(pot1, q1, comp1)
 
                 xrange0 = libphoebe.roche_xrange(q0, F0, 1.0-ecc, pot0+1e-6, choice=0)
@@ -3431,8 +3426,8 @@ class Bundle(ParameterSet):
 
         # forbid pblum_mode='dataset-coupled' if no other valid datasets
         # forbid pblum_mode='dataset-coupled' with a dataset which is scaled to data or to another that is in-turn color-coupled
-        for param in self.filter(qualifier='pblum_mode', value='dataset-coupled', **_skip_filter_checks).to_list():
-            coupled_to = self.get_value(qualifier='pblum_dataset', dataset=param.dataset, **_skip_filter_checks)
+        for param in self.filter(qualifier='pblum_mode', value='dataset-coupled').to_list():
+            coupled_to = self.get_value(qualifier='pblum_dataset', dataset=param.dataset)
             if coupled_to == '':
                 coupled_to = None
                 if param.is_visible:
@@ -3441,38 +3436,38 @@ class Bundle(ParameterSet):
                                     [param],
                                     True, ['system', 'run_compute'])
 
-            pblum_mode = self.get_value(qualifier='pblum_mode', dataset=coupled_to, **_skip_filter_checks)
+            pblum_mode = self.get_value(qualifier='pblum_mode', dataset=coupled_to)
             if pblum_mode =='dataset-coupled':
                 report.add_item(self,
-                                "cannot set pblum_dataset@{}='{}' as that dataset has pblum_mode@{}='dataset-coupled'.  Perhaps set to '{}' instead.".format(param.dataset, coupled_to, coupled_to, self.get_value(qualifier='pblum_dataset', dataset=coupled_to, context='dataset', **_skip_filter_checks)),
+                                "cannot set pblum_dataset@{}='{}' as that dataset has pblum_mode@{}='dataset-coupled'.  Perhaps set to '{}' instead.".format(param.dataset, coupled_to, coupled_to, self.get_value(qualifier='pblum_dataset', dataset=coupled_to, context='dataset')),
                                 [param,
-                                self.get_parameter(qualifier='pblum_mode', dataset=coupled_to, **_skip_filter_checks)],
+                                self.get_parameter(qualifier='pblum_mode', dataset=coupled_to)],
                                 True, ['system', 'run_compute'])
 
         # require any pblum_mode == 'dataset-scaled' to have accompanying data
-        for param in self.filter(qualifier='pblum_mode', value='dataset-scaled', **_skip_filter_checks).to_list():
-            if not len(self.get_value(qualifier='fluxes', dataset=param.dataset, context='dataset', **_skip_filter_checks)):
+        for param in self.filter(qualifier='pblum_mode', value='dataset-scaled').to_list():
+            if not len(self.get_value(qualifier='fluxes', dataset=param.dataset, context='dataset')):
                 report.add_item(self,
                                 "fluxes@{} cannot be empty if pblum_mode@{}='dataset-scaled'".format(param.dataset, param.dataset),
                                 [param,
-                                self.get_parameter(qualifier='fluxes', dataset=param.dataset, context='dataset', **_skip_filter_checks)],
+                                self.get_parameter(qualifier='fluxes', dataset=param.dataset, context='dataset')],
                                 True, ['system', 'run_compute'])
 
             # also check to make sure that we'll be able to handle the interpolation in time if the system is time-dependent
             if self.hierarchy.is_time_dependent(consider_gaussian_process=False):
-                compute_times = self.get_value(qualifier='compute_times', dataset=param.dataset, context='dataset', **_skip_filter_checks)
-                times = self.get_value(qualifier='times', dataset=param.dataset, context='dataset', **_skip_filter_checks)
+                compute_times = self.get_value(qualifier='compute_times', dataset=param.dataset, context='dataset')
+                times = self.get_value(qualifier='times', dataset=param.dataset, context='dataset')
                 if len(times) and len(compute_times) and (min(times) < min(compute_times) or max(times) > max(compute_times)):
 
-                    params = [self.get_parameter(qualifier='pblum_mode', dataset=param.dataset, **_skip_filter_checks),
-                              self.get_parameter(qualifier='times', dataset=param.dataset, context='dataset', **_skip_filter_checks),
-                              self.get_parameter(qualifier='compute_times', dataset=param.dataset, context='dataset', **_skip_filter_checks)]
+                    params = [self.get_parameter(qualifier='pblum_mode', dataset=param.dataset),
+                              self.get_parameter(qualifier='times', dataset=param.dataset, context='dataset'),
+                              self.get_parameter(qualifier='compute_times', dataset=param.dataset, context='dataset')]
 
                     msg = "'compute_times@{}' must cover full range of 'times@{}', for time-dependent systems with pblum_mode@{}='dataset-scaled'.".format(param.dataset, param.dataset, param.dataset)
-                    if len(self.get_parameter(qualifier='compute_phases', dataset=param.dataset, context='dataset', **_skip_filter_checks).constrains):
+                    if len(self.get_parameter(qualifier='compute_phases', dataset=param.dataset, context='dataset').constrains):
                         msg += " Consider flipping the 'compute_phases' constraint and providing 'compute_times' instead."
-                        params += [self.get_parameter(qualifier='compute_phases', dataset=param.dataset, context='dataset', **_skip_filter_checks),
-                                   self.get_constraint(qualifier='compute_times', dataset=param.dataset, **_skip_filter_checks)]
+                        params += [self.get_parameter(qualifier='compute_phases', dataset=param.dataset, context='dataset'),
+                                   self.get_constraint(qualifier='compute_times', dataset=param.dataset)]
 
                     report.add_item(self,
                                     msg,
@@ -3480,7 +3475,7 @@ class Bundle(ParameterSet):
                                     True, ['system', 'run_compute'])
 
         # tests for lengths of fluxes, rvs, etc vs times (and fluxes vs wavelengths for spectral datasets)
-        for param in self.filter(qualifier=['times', 'fluxes', 'rvs', 'sigmas', 'wavelengths', 'flux_densities'], context='dataset', **_skip_filter_checks).to_list():
+        for param in self.filter(qualifier=['times', 'fluxes', 'rvs', 'sigmas', 'wavelengths', 'flux_densities'], context='dataset').to_list():
             shape = param.get_value().shape
             if len(shape) > 1:
                 report.add_item(self,
@@ -3488,16 +3483,16 @@ class Bundle(ParameterSet):
                                 [param],
                                 True, ['system', 'run_compute'])
 
-            if param.qualifier in ['fluxes', 'rvs', 'sigmas'] and shape[0] > 0 and shape[0] != self.get_value(qualifier='times', dataset=param.dataset, component=param.component, context='dataset', **_skip_filter_checks).shape[0]:
-                tparam = self.get_parameter(qualifier='times', dataset=param.dataset, component=param.component, context='dataset', **_skip_filter_checks)
+            if param.qualifier in ['fluxes', 'rvs', 'sigmas'] and shape[0] > 0 and shape[0] != self.get_value(qualifier='times', dataset=param.dataset, component=param.component, context='dataset').shape[0]:
+                tparam = self.get_parameter(qualifier='times', dataset=param.dataset, component=param.component, context='dataset')
                 report.add_item(self,
                                 "{} must be of same length as {}".format(param.twig, tparam.twig),
                                 [param, tparam],
                                 True, ['system', 'run_compute'])
 
-            if param.qualifier in ['flux_densities'] and shape[0] > 0 and shape[0] != self.get_value(qualifier='wavelengths', dataset=param.dataset, component=param.component,  context='dataset', **_skip_filter_checks).shape[0]:
+            if param.qualifier in ['flux_densities'] and shape[0] > 0 and shape[0] != self.get_value(qualifier='wavelengths', dataset=param.dataset, component=param.component,  context='dataset').shape[0]:
                 # NOTE: flux_densities is time-dependent, but wavelengths is not
-                wparam = self.get_parameter(qualifier='wavelengths', dataset=param.dataset, component=param.component, context='dataset', **_skip_filter_checks)
+                wparam = self.get_parameter(qualifier='wavelengths', dataset=param.dataset, component=param.component, context='dataset')
                 report.add_item(self,
                                 "{}@{}@{} must be of same length as {}@{}".format(param.twig, wparam.twig),
                                 [param, wparam],
@@ -3518,60 +3513,60 @@ class Bundle(ParameterSet):
         #### WARNINGS ONLY ####
         # let's check teff vs gravb_bol and irrad_frac_refl_bol
         for component in hier_stars:
-            teff = self.get_value(qualifier='teff', component=component, context='component', unit=u.K, **_skip_filter_checks)
-            gravb_bol = self.get_value(qualifier='gravb_bol', component=component, context='component', **_skip_filter_checks)
+            teff = self.get_value(qualifier='teff', component=component, context='component', unit=u.K)
+            gravb_bol = self.get_value(qualifier='gravb_bol', component=component, context='component')
 
             if teff >= 8000. and gravb_bol < 0.9:
                 report.add_item(self,
                                 "'{}' probably has a radiative atm (teff={:.0f}K>8000K), for which gravb_bol>=0.9 might be a better approx than gravb_bol={:.2f}.".format(component, teff, gravb_bol),
-                                [self.get_parameter(qualifier='teff', component=component, context='component', **_skip_filter_checks),
-                                 self.get_parameter(qualifier='gravb_bol', component=component, context='component', **_skip_filter_checks)],
+                                [self.get_parameter(qualifier='teff', component=component, context='component'),
+                                 self.get_parameter(qualifier='gravb_bol', component=component, context='component')],
                                 False, ['system', 'run_compute'])
             elif teff <= 6600. and gravb_bol >= 0.9:
                 report.add_item(self,
                                 "'{}' probably has a convective atm (teff={:.0f}K<6600K), for which gravb_bol<0.9 (suggestion: 0.32) might be a better approx than gravb_bol={:.2f}.".format(component, teff, gravb_bol),
-                                [self.get_parameter(qualifier='teff', component=component, context='component', **_skip_filter_checks),
-                                 self.get_parameter(qualifier='gravb_bol', component=component, context='component', **_skip_filter_checks)],
+                                [self.get_parameter(qualifier='teff', component=component, context='component'),
+                                 self.get_parameter(qualifier='gravb_bol', component=component, context='component')],
                                 False, ['system', 'run_compute'])
             elif (teff > 6600 and teff < 8000) and gravb_bol < 0.32 or gravb_bol > 1.00:
                 report.add_item(self,
                                 "'{}' has intermittent temperature (6600K<teff={:.0f}K<8000K), gravb_bol might be better between 0.32-1.00 than gravb_bol={:.2f}.".format(component, teff, gravb_bol),
-                                [self.get_parameter(qualifier='teff', component=component, context='component', **_skip_filter_checks),
-                                 self.get_parameter(qualifier='gravb_bol', component=component, context='component', **_skip_filter_checks)],
+                                [self.get_parameter(qualifier='teff', component=component, context='component'),
+                                 self.get_parameter(qualifier='gravb_bol', component=component, context='component')],
                                 False, ['system', 'run_compute'])
 
         for component in hier_stars:
-            teff = self.get_value(qualifier='teff', component=component, context='component', unit=u.K, **_skip_filter_checks)
-            irrad_frac_refl_bol = self.get_value(qualifier='irrad_frac_refl_bol', component=component, context='component', **_skip_filter_checks)
+            teff = self.get_value(qualifier='teff', component=component, context='component', unit=u.K)
+            irrad_frac_refl_bol = self.get_value(qualifier='irrad_frac_refl_bol', component=component, context='component')
 
             if teff >= 8000. and irrad_frac_refl_bol < 0.8:
                 report.add_item(self,
                                 "'{}' probably has a radiative atm (teff={:.0f}K>=8000K), for which irrad_frac_refl_bol>0.8 (suggestion: 1.0) might be a better approx than irrad_frac_refl_bol={:.2f}.".format(component, teff, irrad_frac_refl_bol),
-                                [self.get_parameter(qualifier='teff', component=component, context='component', **_skip_filter_checks),
-                                 self.get_parameter(qualifier='irrad_frac_refl_bol', component=component, context='component', **_skip_filter_checks)],
+                                [self.get_parameter(qualifier='teff', component=component, context='component'),
+                                 self.get_parameter(qualifier='irrad_frac_refl_bol', component=component, context='component')],
                                 False, ['system', 'run_compute'])
             elif teff <= 6600. and irrad_frac_refl_bol >= 0.75:
                 report.add_item(self,
                                 "'{}' probably has a convective atm (teff={:.0f}K<=6600K), for which irrad_frac_refl_bol<0.75 (suggestion: 0.6) might be a better approx than irrad_frac_refl_bol={:.2f}.".format(component, teff, irrad_frac_refl_bol),
-                                [self.get_parameter(qualifier='teff', component=component, context='component', **_skip_filter_checks),
-                                 self.get_parameter(qualifier='irrad_frac_refl_bol', component=component, context='component', **_skip_filter_checks)],
+                                [self.get_parameter(qualifier='teff', component=component, context='component'),
+                                 self.get_parameter(qualifier='irrad_frac_refl_bol', component=component, context='component')],
                                 False, ['system', 'run_compute'])
             elif (teff > 6600. and teff < 8000) and irrad_frac_refl_bol < 0.6:
                 report.add_item(self,
                                 "'{}' has intermittent temperature (6600K<teff={:.0f}K<8000K), irrad_frac_refl_bol might be better between 0.6-1.00 than irrad_frac_refl_bol={:.2f}.".format(component, teff, irrad_frac_refl_bol),
-                                [self.get_parameter(qualifier='teff', component=component, context='component', **_skip_filter_checks),
-                                 self.get_parameter(qualifier='irrad_frac_refl_bol', component=component, context='component', **_skip_filter_checks)],
+                                [self.get_parameter(qualifier='teff', component=component, context='component'),
+                                 self.get_parameter(qualifier='irrad_frac_refl_bol', component=component, context='component')],
                                 False, ['system', 'run_compute'])
 
         # warning if any t0_supconj is more than 10 cycles from t0@system if time dependent
         if hier.is_time_dependent():
-            t0_system = self.get_value(qualifier='t0', context='system', unit=u.d, **_skip_filter_checks)
-            for param in self.filter(qualifier='t0_supconj', component=hier_orbits, context='component', **_skip_filter_checks).to_list():
-                norbital_cycles = abs(param.get_value(unit=u.d) - t0_system)  / self.get_value(qualifier='period', component=param.component, context='component', unit=u.d, **_skip_filter_checks)
+            t0_system = self.get_value(qualifier='t0', context='system', unit=u.d)
+            for param in self.filter(qualifier='t0_supconj', component=hier_orbits, context='component').to_list():
+                norbital_cycles = abs(param.get_value(unit=u.d) - t0_system)  / self.get_value(qualifier='period', component=param.component, context='component', unit=u.d)
                 if norbital_cycles > 10:
                     report.add_item(self,
                                     "{}@{} is ~{} orbital cycles from t0@system, which could cause precision issues for time-dependent systems".format(param.qualifier, param.component, int(norbital_cycles)),
-                                    [param, self.get_parameter(qualifier='t0', context='system', **_skip_filter_checks)],
+                                    [param, self.get_parameter(qualifier='t0', context='system')],
                                     False, ['system', 'run_compute'])
 
         self._run_checks_warning_error(report, raise_logger_warning, raise_error)
@@ -3642,10 +3637,10 @@ class Bundle(ParameterSet):
                                             report=report,
                                             **kwargs)
 
-        run_checks_compute = self.get_value(qualifier='run_checks_compute', context='setting', default='*', expand=True, **_skip_filter_checks)
+        run_checks_compute = self.get_value(qualifier='run_checks_compute', context='setting', default='*', expand=True)
         if compute is None:
             computes = run_checks_compute
-            addl_parameters += [self.get_parameter(qualifier='run_checks_compute', context='setting', **_skip_filter_checks)]
+            addl_parameters += [self.get_parameter(qualifier='run_checks_compute', context='setting')]
         else:
             computes = compute
             if isinstance(computes, str):
@@ -3663,7 +3658,7 @@ class Bundle(ParameterSet):
                                 )
 
             if run_checks_server:
-                use_server_param = self.get_parameter(qualifier='use_server', compute=compute, context='compute', **_skip_filter_checks)
+                use_server_param = self.get_parameter(qualifier='use_server', compute=compute, context='compute')
                 report = self.run_checks_server(server=use_server_param.get_value(use_server=kwargs.get('use_server', None)),
                                                 raise_logger_warning=False,
                                                 raise_error=False,
@@ -3687,9 +3682,9 @@ class Bundle(ParameterSet):
         all_pbs = list_passbands(full_dict=True)
         online_pbs = list_online_passbands(full_dict=True)
 
-        pb_needs_ext = self.get_value(qualifier='ebv', context='system', **_skip_filter_checks) != 0
+        pb_needs_ext = self.get_value(qualifier='ebv', context='system') != 0
 
-        for pbparam in self.filter(qualifier='passband', **_skip_filter_checks).to_list():
+        for pbparam in self.filter(qualifier='passband').to_list():
 
             # we include this in the loop so that we get the most recent dict
             # if a previous passband had to be updated
@@ -3710,7 +3705,7 @@ class Bundle(ParameterSet):
                 if installed_timestamp is not None and _timestamp_to_dt(installed_timestamp) < _timestamp_to_dt("Mon Nov 2 00:00:00 2020"):
                     report.add_item(self,
                                     "'{}' passband ({}) with extinction needs to be updated for fixed UV extinction coefficients.  Run phoebe.list_passband_online_history('{}') to get a list of available changes and phoebe.update_passband('{}') or phoebe.update_all_passbands() to update.".format(pb, pbparam.twig, pb, pb),
-                                    [pbparam, self.get_parameter(qualifier='ebv', context='system', **_skip_filter_checks)],
+                                    [pbparam, self.get_parameter(qualifier='ebv', context='system')],
                                     True, 'run_compute')
 
             # NOTE: atms are not attached to datasets, but per-compute and per-component
@@ -3813,25 +3808,25 @@ class Bundle(ParameterSet):
         for component in hier_stars:
             if irrad_enabled:
                 # first check ld_coeffs_bol vs ld_func_bol
-                ld_mode = self.get_value(qualifier='ld_mode_bol', component=component, context='component', **_skip_filter_checks)
-                ld_func = str(self.get_value(qualifier='ld_func_bol', component=component, context='component', **_skip_filter_checks))
-                ld_coeffs_source = self.get_value(qualifier='ld_coeffs_source_bol', component=component, context='component', **_skip_filter_checks)
-                ld_coeffs = self.get_value(qualifier='ld_coeffs_bol', component=component, context='component', **_skip_filter_checks)
+                ld_mode = self.get_value(qualifier='ld_mode_bol', component=component, context='component')
+                ld_func = str(self.get_value(qualifier='ld_func_bol', component=component, context='component'))
+                ld_coeffs_source = self.get_value(qualifier='ld_coeffs_source_bol', component=component, context='component')
+                ld_coeffs = self.get_value(qualifier='ld_coeffs_bol', component=component, context='component')
 
                 if np.any(np.isnan(ld_coeffs)):
                     if ld_mode == 'lookup':
                         report.add_item(self,
                                         'ld_mode_bol=\'lookup\' resulted in nans for ld_coeffs_bol.  Check system parameters to be within grids or change ld_mode_bol to \'manual\' and provide ld_coeffs_bol',
-                                        [self.get_parameter(qualifier='ld_mode_bol', component=component, context='component', **_skip_filter_checks),
-                                        self.get_parameter(qualifier='teff', component=component, context='component', **_skip_filter_checks),
-                                        self.get_parameter(qualifier='logg', component=component, context='component', **_skip_filter_checks),
-                                        self.get_parameter(qualifier='abun', component=component, context='component', **_skip_filter_checks)
+                                        [self.get_parameter(qualifier='ld_mode_bol', component=component, context='component'),
+                                        self.get_parameter(qualifier='teff', component=component, context='component'),
+                                        self.get_parameter(qualifier='logg', component=component, context='component'),
+                                        self.get_parameter(qualifier='abun', component=component, context='component')
                                         ],
                                         True, 'run_compute')
                     elif ld_mode == 'manual':
                         report.add_item(self,
                                         'nans in ld_coeffs_bol are forbidden',
-                                        [self.get_parameter(qualifier='ld_coeffs_bol', component=component, context='component', **_skip_filter_checks)],
+                                        [self.get_parameter(qualifier='ld_coeffs_bol', component=component, context='component')],
                                         True, 'run_compute')
                     else:
                         # if interp, then the previously set value won't be used anyways, so we'll ignore nans
@@ -3841,8 +3836,8 @@ class Bundle(ParameterSet):
                     if ld_coeffs_source != 'auto' and ld_coeffs_source not in all_pbs.get('Bolometric:900-40000', {}).get('atms_ld', []):
                         report.add_item(self,
                                         'Bolometric:900-40000 does not support ld_coeffs_source_bol={}.  Either change ld_coeffs_source_bol@{}@component or ld_mode_bol@{}@component'.format(pb, ld_coeffs_source, component, component),
-                                        [self.get_parameter(qualifier='ld_coeffs_source_bol', component=component, context='component', **_skip_filter_checks),
-                                         self.get_parameter(qualifier='ld_mode_bol', component=component, context='component', **_skip_filter_checks)
+                                        [self.get_parameter(qualifier='ld_coeffs_source_bol', component=component, context='component'),
+                                         self.get_parameter(qualifier='ld_mode_bol', component=component, context='component')
                                         ],
                                         True, 'run_compute')
                 elif ld_mode == 'manual':
@@ -3851,8 +3846,8 @@ class Bundle(ParameterSet):
                     if not check[0]:
                         report.add_item(self,
                                         check[1],
-                                        [self.get_parameter(qualifier='ld_func_bol', component=component, context='component', **_skip_filter_checks),
-                                         self.get_parameter(qualifier='ld_coeffs_bol', component=component, context='component', **_skip_filter_checks)
+                                        [self.get_parameter(qualifier='ld_func_bol', component=component, context='component'),
+                                         self.get_parameter(qualifier='ld_coeffs_bol', component=component, context='component')
                                         ],
                                         True, 'run_compute')
 
@@ -3861,8 +3856,8 @@ class Bundle(ParameterSet):
                         if not check:
                             report.add_item(self,
                                             'ld_coeffs_bol={} not compatible for ld_func_bol=\'{}\'.'.format(ld_coeffs, ld_func),
-                                            [self.get_parameter(qualifier='ld_func_bol', component=component, context='component', **_skip_filter_checks),
-                                             self.get_parameter(qualifier='ld_coeffs_bol', component=component, context='component', **_skip_filter_checks)
+                                            [self.get_parameter(qualifier='ld_func_bol', component=component, context='component'),
+                                             self.get_parameter(qualifier='ld_coeffs_bol', component=component, context='component')
                                             ],
                                             True, 'run_compute')
 
@@ -3872,17 +3867,17 @@ class Bundle(ParameterSet):
                             if not check:
                                 report.add_item(self,
                                                 'ld_coeffs_bol={} result in limb-brightening which is not allowed for irradiation.'.format(ld_coeffs),
-                                                [self.get_parameter(qualifier='ld_func_bol', component=component, context='component', **_skip_filter_checks),
-                                                 self.get_parameter(qualifier='ld_coeffs_bol', component=component, context='component', **_skip_filter_checks)
+                                                [self.get_parameter(qualifier='ld_func_bol', component=component, context='component'),
+                                                 self.get_parameter(qualifier='ld_coeffs_bol', component=component, context='component')
                                                 ],
                                                 True, 'run_compute')
 
                 for compute in computes:
-                    if self.get_compute(compute, **_skip_filter_checks).kind in ['legacy'] and ld_func not in ['linear', 'logarithmic', 'square_root']:
+                    if self.get_compute(compute).kind in ['legacy'] and ld_func not in ['linear', 'logarithmic', 'square_root']:
                         report.add_item(self,
-                                        "ld_func_bol='{}' not supported by '{}' backend used by compute='{}'.  Use 'linear', 'logarithmic', or 'square_root'.".format(ld_func, self.get_compute(compute, **_skip_filter_checks).kind, compute),
-                                        [self.get_parameter(qualifier='ld_func_bol', component=component, context='component', **_skip_filter_checks),
-                                         self.get_parameter(qualifier='run_checks_compute', context='setting', **_skip_filter_checks)]+addl_parameters,
+                                        "ld_func_bol='{}' not supported by '{}' backend used by compute='{}'.  Use 'linear', 'logarithmic', or 'square_root'.".format(ld_func, self.get_compute(compute).kind, compute),
+                                        [self.get_parameter(qualifier='ld_func_bol', component=component, context='component'),
+                                         self.get_parameter(qualifier='run_checks_compute', context='setting')]+addl_parameters,
                                         True, 'run_compute')
                     # other compute backends ignore bolometric limb-darkening
 
@@ -3892,26 +3887,26 @@ class Bundle(ParameterSet):
                     continue
                 dataset_ps = self.get_dataset(dataset=dataset, check_visible=False)
 
-                ld_mode = dataset_ps.get_value(qualifier='ld_mode', component=component, **_skip_filter_checks)
-                ld_func = dataset_ps.get_value(qualifier='ld_func', component=component, **_skip_filter_checks)
-                ld_coeffs_source = dataset_ps.get_value(qualifier='ld_coeffs_source', component=component, **_skip_filter_checks)
-                ld_coeffs = dataset_ps.get_value(qualifier='ld_coeffs', component=component, **_skip_filter_checks)
-                pb = dataset_ps.get_value(qualifier='passband', **_skip_filter_checks)
+                ld_mode = dataset_ps.get_value(qualifier='ld_mode', component=component)
+                ld_func = dataset_ps.get_value(qualifier='ld_func', component=component)
+                ld_coeffs_source = dataset_ps.get_value(qualifier='ld_coeffs_source', component=component)
+                ld_coeffs = dataset_ps.get_value(qualifier='ld_coeffs', component=component)
+                pb = dataset_ps.get_value(qualifier='passband')
 
                 if np.any(np.isnan(ld_coeffs)):
                     if ld_mode == 'lookup':
                         report.add_item(self,
                                         'ld_mode=\'lookup\' resulted in nans for ld_coeffs.  Check system parameters to be within grids or change ld_mode to \'manual\' and provide ld_coeffs',
                                         [dataset_ps.get_parameter(qualifier='ld_mode', component=component, **kwargs),
-                                        self.get_parameter(qualifier='teff', component=component, context='component', **_skip_filter_checks),
-                                        self.get_parameter(qualifier='logg', component=component, context='component', **_skip_filter_checks),
-                                        self.get_parameter(qualifier='abun', component=component, context='component', **_skip_filter_checks)
+                                        self.get_parameter(qualifier='teff', component=component, context='component'),
+                                        self.get_parameter(qualifier='logg', component=component, context='component'),
+                                        self.get_parameter(qualifier='abun', component=component, context='component')
                                         ],
                                         True, 'run_compute')
                     elif ld_mode == 'manual':
                         report.add_item(self,
                                         'nans in ld_coeffs are forbidden',
-                                        [dataset_ps.get_parameter(qualifier='ld_coeffs', component=component, **_skip_filter_checks)],
+                                        [dataset_ps.get_parameter(qualifier='ld_coeffs', component=component)],
                                         True, 'run_compute')
                     else:
                         # if interp, then the previously set value won't be used anyways, so we'll ignore nans
@@ -3920,27 +3915,27 @@ class Bundle(ParameterSet):
                 if ld_mode == 'interp':
                     for compute in computes:
                         # TODO: should we ignore if the dataset is disabled?
-                        compute_kind = self.get_compute(compute=compute, **_skip_filter_checks).kind
+                        compute_kind = self.get_compute(compute=compute).kind
                         if compute_kind != 'phoebe':
                             report.add_item(self,
                                             "ld_mode='interp' not supported by '{}' backend used by compute='{}'.  Change ld_mode@{}@{}.".format(compute_kind, compute, component, dataset),
-                                            [dataset_ps.get_parameter(qualifier='ld_mode', component=component, **_skip_filter_checks)
+                                            [dataset_ps.get_parameter(qualifier='ld_mode', component=component)
                                             ]+addl_parameters,
                                             True, 'run_compute')
                         else:
-                            atm = self.get_value(qualifier='atm', component=component, compute=compute, context='compute', atm=kwargs.get('atm', None), **_skip_filter_checks)
+                            atm = self.get_value(qualifier='atm', component=component, compute=compute, context='compute', atm=kwargs.get('atm', None))
                             if atm not in ['ck2004', 'phoenix']:
-                                if 'ck2004' in self.get_parameter(qualifier='atm', component=component, compute=compute, context='compute', atm=kwargs.get('atm', None), **_skip_filter_checks).choices:
+                                if 'ck2004' in self.get_parameter(qualifier='atm', component=component, compute=compute, context='compute', atm=kwargs.get('atm', None)).choices:
                                     report.add_item(self,
                                                     "ld_mode='interp' not supported by atm='{}'.  Either change atm@{}@{} or ld_mode@{}@{}.".format(atm, component, compute, component, dataset),
-                                                    [dataset_ps.get_parameter(qualifier='ld_mode', component=component, **_skip_filter_checks),
-                                                     self.get_parameter(qualifier='atm', component=component, compute=compute, context='compute', **_skip_filter_checks)
+                                                    [dataset_ps.get_parameter(qualifier='ld_mode', component=component),
+                                                     self.get_parameter(qualifier='atm', component=component, compute=compute, context='compute')
                                                     ]+addl_parameters,
                                                     True, 'run_compute')
                                 else:
                                     report.add_item(self,
                                                     "ld_mode='interp' not supported by '{}' backend used by compute='{}'.  Change ld_mode@{}@{} or use a backend that supports atm='ck2004'.".format(self.get_compute(compute).kind, compute, component, dataset),
-                                                    [dataset_ps.get_parameter(qualifier='ld_mode', component=component, **_skip_filter_checks)
+                                                    [dataset_ps.get_parameter(qualifier='ld_mode', component=component)
                                                     ]+addl_parameters,
                                                     True, 'run_compute')
 
@@ -3949,8 +3944,8 @@ class Bundle(ParameterSet):
                     if ld_coeffs_source != 'auto' and ld_coeffs_source not in all_pbs.get(pb, {}).get('atms_ld', []) :
                         report.add_item(self,
                                         'passband={} does not support ld_coeffs_source={}.  Either change ld_coeffs_source@{}@{} or ld_mode@{}@{}'.format(pb, ld_coeffs_source, component, dataset, component, dataset),
-                                        [dataset_ps.get_parameter(qualifier='ld_coeffs_source', component=component, **_skip_filter_checks),
-                                         dataset_ps.get_parameter(qualifier='ld_mode', component=component, **_skip_filter_checks)
+                                        [dataset_ps.get_parameter(qualifier='ld_coeffs_source', component=component),
+                                         dataset_ps.get_parameter(qualifier='ld_mode', component=component)
                                         ],
                                         True, 'run_compute')
 
@@ -3960,8 +3955,8 @@ class Bundle(ParameterSet):
                     if not check[0]:
                         report.add_item(self,
                                         check[1],
-                                        [dataset_ps.get_parameter(qualifier='ld_func', component=component, **_skip_filter_checks),
-                                         dataset_ps.get_parameter(qualifier='ld_coeffs', component=component, **_skip_filter_checks)
+                                        [dataset_ps.get_parameter(qualifier='ld_func', component=component),
+                                         dataset_ps.get_parameter(qualifier='ld_coeffs', component=component)
                                         ],
                                         True, 'run_compute')
 
@@ -3970,8 +3965,8 @@ class Bundle(ParameterSet):
                         if not check:
                             report.add_item(self,
                                             'ld_coeffs={} not compatible for ld_func=\'{}\'.'.format(ld_coeffs, ld_func),
-                                            [dataset_ps.get_parameter(qualifier='ld_func', component=component, **_skip_filter_checks),
-                                             dataset_ps.get_parameter(qualifier='ld_coeffs', component=component, **_skip_filter_checks)
+                                            [dataset_ps.get_parameter(qualifier='ld_func', component=component),
+                                             dataset_ps.get_parameter(qualifier='ld_coeffs', component=component)
                                             ],
                                             True, 'run_compute')
 
@@ -3981,8 +3976,8 @@ class Bundle(ParameterSet):
                             if not check:
                                 report.add_item(self,
                                                 'ld_coeffs={} result in limb-brightening.  Use with caution.'.format(ld_coeffs),
-                                                [dataset_ps.get_parameter(qualifier='ld_func', component=component, **_skip_filter_checks),
-                                                 dataset_ps.get_parameter(qualifier='ld_coeffs', component=component, **_skip_filter_checks)
+                                                [dataset_ps.get_parameter(qualifier='ld_func', component=component),
+                                                 dataset_ps.get_parameter(qualifier='ld_coeffs', component=component)
                                                  ],
                                                  False, 'run_compute')
 
@@ -3991,32 +3986,32 @@ class Bundle(ParameterSet):
 
                 if ld_mode in ['lookup', 'manual']:
                     for compute in computes:
-                        compute_kind = self.get_compute(compute, **_skip_filter_checks).kind
+                        compute_kind = self.get_compute(compute).kind
                         if compute_kind in ['legacy'] and ld_func not in ['linear', 'logarithmic', 'square_root']:
                             report.add_item(self,
-                                            "ld_func='{}' not supported by '{}' backend used by compute='{}'.  Use 'linear', 'logarithmic', or 'square_root'.".format(ld_func, self.get_compute(compute, **_skip_filter_checks).kind, compute),
-                                            [dataset_ps.get_parameter(qualifier='ld_func', component=component, **_skip_filter_checks)]+addl_parameters,
+                                            "ld_func='{}' not supported by '{}' backend used by compute='{}'.  Use 'linear', 'logarithmic', or 'square_root'.".format(ld_func, self.get_compute(compute).kind, compute),
+                                            [dataset_ps.get_parameter(qualifier='ld_func', component=component)]+addl_parameters,
                                             True, 'run_compute')
 
                         if compute_kind in ['ellc'] and ld_func not in ['linear', 'logarithmic', 'square_root', 'quadratic', 'power']:
                             report.add_item(self,
-                                            "ld_func='{}' not supported by '{}' backend used by compute='{}'.  Use 'linear', 'logarithmic', 'quadratic', or 'square_root' or power.".format(ld_func, self.get_compute(compute, **_skip_filter_checks).kind, compute),
-                                            [dataset_ps.get_parameter(qualifier='ld_func', component=component, **_skip_filter_checks)]+addl_parameters,
+                                            "ld_func='{}' not supported by '{}' backend used by compute='{}'.  Use 'linear', 'logarithmic', 'quadratic', or 'square_root' or power.".format(ld_func, self.get_compute(compute).kind, compute),
+                                            [dataset_ps.get_parameter(qualifier='ld_func', component=component)]+addl_parameters,
                                             True, 'run_compute')
 
                         if compute_kind in ['jktebop'] and ld_func not in ['linear', 'logarithmic', 'square_root', 'quadratic']:
                             report.add_item(self,
-                                            "ld_func='{}' not supported by '{}' backend used by compute='{}'.  Use 'linear', 'logarithmic', 'quadratic', or 'square_root'.".format(ld_func, self.get_compute(compute, **_skip_filter_checks).kind, compute),
-                                            [dataset_ps.get_parameter(qualifier='ld_func', component=component, **_skip_filter_checks)]+addl_parameters,
+                                            "ld_func='{}' not supported by '{}' backend used by compute='{}'.  Use 'linear', 'logarithmic', 'quadratic', or 'square_root'.".format(ld_func, self.get_compute(compute).kind, compute),
+                                            [dataset_ps.get_parameter(qualifier='ld_func', component=component)]+addl_parameters,
                                             True, 'run_compute')
 
-                atm = self.get_value(qualifier='atm', component=component, compute=compute, context='compute', atm=kwargs.get('atm', None), **_skip_filter_checks)
-                pblum_method = self.get_value(qualifier='pblum_method', compute=compute, context='compute', pblum_method=kwargs.get('pblum_method', None), default='phoebe', **_skip_filter_checks)
+                atm = self.get_value(qualifier='atm', component=component, compute=compute, context='compute', atm=kwargs.get('atm', None))
+                pblum_method = self.get_value(qualifier='pblum_method', compute=compute, context='compute', pblum_method=kwargs.get('pblum_method', None), default='phoebe')
                 if atm=='blackbody' and pblum_method=='stefan-boltzmann':
                     report.add_item(self,
                                     "pblum_method@{}='stefan-boltzmann' not supported with atm@{}='blackbody'".format(compute, component),
-                                    self.filter(qualifier='atm', component=component, compute=compute, context='compute', **_skip_filter_checks)+
-                                    self.filter(qualifier='pblum_method', compute=compute, context='compute', **_skip_filter_checks),
+                                    self.filter(qualifier='atm', component=component, compute=compute, context='compute')+
+                                    self.filter(qualifier='pblum_method', compute=compute, context='compute'),
                                     True, 'run_compute')
 
 
@@ -4024,22 +4019,22 @@ class Bundle(ParameterSet):
             if self.hierarchy.get_kind_of(comp)=='envelope':
                 return np.sum([_get_proj_area(c) for c in self.hierarchy.get_siblings_of(comp)])
             else:
-                return np.pi*self.get_value(qualifier='requiv', component=comp, context='component', unit='solRad', **_skip_filter_checks)**2
+                return np.pi*self.get_value(qualifier='requiv', component=comp, context='component', unit='solRad')**2
 
         def _get_surf_area(comp):
             if self.hierarchy.get_kind_of(comp)=='envelope':
                 return np.sum([_get_surf_area(c) for c in self.hierarchy.get_siblings_of(comp)])
             else:
-                return 4*np.pi*self.get_value(qualifier='requiv', component=comp, context='component', unit='solRad', **_skip_filter_checks)**2
+                return 4*np.pi*self.get_value(qualifier='requiv', component=comp, context='component', unit='solRad')**2
 
 
         for compute in computes:
-            compute_kind = self.get_compute(compute=compute, **_skip_filter_checks).kind
+            compute_kind = self.get_compute(compute=compute).kind
 
-            gps = self.filter(kind=['gp_celerite2','gp_sklearn'], context='feature', **_skip_filter_checks).features
-            compute_enabled_gps = self.filter(qualifier='enabled', compute=compute, feature=gps, value=True, **_skip_filter_checks).features
-            compute_enabled_datasets = self.filter(qualifier='enabled', dataset=self.datasets, value=True, **_skip_filter_checks).datasets
-            compute_enabled_datasets_with_gps = [ds for ds in self.filter(feature=compute_enabled_gps, **_skip_filter_checks).datasets if ds in compute_enabled_datasets]
+            gps = self.filter(kind=['gp_celerite2','gp_sklearn'], context='feature').features
+            compute_enabled_gps = self.filter(qualifier='enabled', compute=compute, feature=gps, value=True).features
+            compute_enabled_datasets = self.filter(qualifier='enabled', dataset=self.datasets, value=True).datasets
+            compute_enabled_datasets_with_gps = [ds for ds in self.filter(feature=compute_enabled_gps).datasets if ds in compute_enabled_datasets]
 
             # per-compute hierarchy checks
             if len(self.hierarchy.get_envelopes()):
@@ -4069,10 +4064,10 @@ class Bundle(ParameterSet):
             # NOTE: similar logic exists for init_from in run_checks_solver
 
             # distribution checks
-            sample_from = self.get_value(qualifier='sample_from', compute=compute, context='compute', sample_from=kwargs.get('sample_from', None), default=[], expand=True, **_skip_filter_checks)
+            sample_from = self.get_value(qualifier='sample_from', compute=compute, context='compute', sample_from=kwargs.get('sample_from', None), default=[], expand=True)
             for dist_or_solution in sample_from:
                 if dist_or_solution in self.distributions:
-                    for distribution_param in self.filter(distribution=dist_or_solution, context='distribution', **_skip_filter_checks).to_list():
+                    for distribution_param in self.filter(distribution=dist_or_solution, context='distribution').to_list():
                         ref_param = distribution_param.get_referenced_parameter()
                         if len(ref_param.constrained_by):
                             # we'll raise an error if a delta distribution (i.e. probably not from a sampler)
@@ -4088,16 +4083,16 @@ class Bundle(ParameterSet):
                                             [distribution_param,
                                             ref_param,
                                             ref_param.is_constraint,
-                                            self.get_parameter(qualifier='sample_from', compute=compute, context='compute', **_skip_filter_checks)
+                                            self.get_parameter(qualifier='sample_from', compute=compute, context='compute')
                                             ]+addl_parameters,
                                             error, 'run_compute')
 
                 elif dist_or_solution in self.solutions:
-                    solution_ps = self.get_solution(solution=dist_or_solution, **_skip_filter_checks)
-                    fitted_uniqueids = solution_ps.get_value(qualifier='fitted_uniqueids', **_skip_filter_checks)
-                    adopt_parameters = solution_ps.get_value(qualifier='adopt_parameters', **_skip_filter_checks)
-                    fitted_ps = self.filter(uniqueid=[str(u) for u in fitted_uniqueids], **_skip_filter_checks)
-                    for param in fitted_ps.filter(twig=adopt_parameters, **_skip_filter_checks).to_list():
+                    solution_ps = self.get_solution(solution=dist_or_solution)
+                    fitted_uniqueids = solution_ps.get_value(qualifier='fitted_uniqueids')
+                    adopt_parameters = solution_ps.get_value(qualifier='adopt_parameters')
+                    fitted_ps = self.filter(uniqueid=[str(u) for u in fitted_uniqueids])
+                    for param in fitted_ps.filter(twig=adopt_parameters).to_list():
                         if len(param.constrained_by):
                             # we'll raise an error if not a sampler (i.e. if values would be adopted by default)
                             # but only a warning for samplers (i.e. distributions would be adopted by default)
@@ -4111,8 +4106,8 @@ class Bundle(ParameterSet):
                                             msg,
                                             [param,
                                              param.is_constraint,
-                                             solution_ps.get_parameter(qualifier='adopt_parameters', **_skip_filter_checks),
-                                             self.get_parameter(qualifier='sample_from', compute=compute, context='compute', **_skip_filter_checks)
+                                             solution_ps.get_parameter(qualifier='adopt_parameters'),
+                                             self.get_parameter(qualifier='sample_from', compute=compute, context='compute')
                                              ]+addl_parameters,
                                              error, 'run_compute')
                 else:
@@ -4122,7 +4117,7 @@ class Bundle(ParameterSet):
                 # check for time-dependency issues with GPs
                 # then if we're using compute_times/phases, compute_times must cover the range of the dataset times
                 for dataset in compute_enabled_datasets_with_gps:
-                    compute_times = self.get_value(qualifier='compute_times', dataset=dataset, context='dataset', unit=u.d, **_skip_filter_checks)
+                    compute_times = self.get_value(qualifier='compute_times', dataset=dataset, context='dataset', unit=u.d)
                     if len(compute_times):
                         for time_param in self.filter(qualifier='times', dataset=dataset, context='dataset', check_visible=True).to_list():
                             gp_warning = True
@@ -4133,20 +4128,20 @@ class Bundle(ParameterSet):
                                     gp_warning = False
                                     report.add_item(self,
                                                     "compute_times must cover full range of times for {} in order to include gaussian processes".format("@".join([time_param.dataset, time_param.component] if time_param.component is not None else [time_param.dataset])),
-                                                    [self.get_parameter(qualifier='compute_times', dataset=dataset, context='dataset', **_skip_filter_checks),
-                                                     self.get_parameter(qualifier='compute_phases', dataset=dataset, context='dataset', **_skip_filter_checks),
-                                                     time_param]+self.filter(qualifier='enabled', feature=compute_enabled_gps, **_skip_filter_checks).to_list()+addl_parameters,
+                                                    [self.get_parameter(qualifier='compute_times', dataset=dataset, context='dataset'),
+                                                     self.get_parameter(qualifier='compute_phases', dataset=dataset, context='dataset'),
+                                                     time_param]+self.filter(qualifier='enabled', feature=compute_enabled_gps).to_list()+addl_parameters,
                                                      True, 'run_compute')
                             if gp_warning:
                                 # then raise a warning to tell that the resulting model will be at different times
                                 report.add_item(self,
                                                 "underlying model will be computed at compute_times for {} but exposed at dataset times in order to include gaussian processes".format("@".join([time_param.dataset, time_param.component] if time_param.component is not None else [time_param.dataset])),
-                                                [self.get_parameter(qualifier='compute_times', dataset=dataset, context='dataset', **_skip_filter_checks),
-                                                 self.get_parameter(qualifier='compute_phases', dataset=dataset, context='dataset', **_skip_filter_checks),
-                                                 time_param]+self.filter(qualifier='enabled', feature=compute_enabled_gps, **_skip_filter_checks).to_list()+addl_parameters,
+                                                [self.get_parameter(qualifier='compute_times', dataset=dataset, context='dataset'),
+                                                 self.get_parameter(qualifier='compute_phases', dataset=dataset, context='dataset'),
+                                                 time_param]+self.filter(qualifier='enabled', feature=compute_enabled_gps).to_list()+addl_parameters,
                                                  False, 'run_compute')
 
-                    ds_ps = self.get_dataset(dataset=dataset, **_skip_filter_checks)
+                    ds_ps = self.get_dataset(dataset=dataset)
                     xqualifier = {'lp': 'wavelength'}.get(ds_ps.kind, 'times')
                     yqualifier = {'lp': 'flux_densities', 'rv': 'rvs', 'lc': 'fluxes'}.get(ds_ps.kind)
                     # we'll loop over components (for RVs or LPs, for example)
@@ -4155,20 +4150,20 @@ class Bundle(ParameterSet):
                     else:
                         ds_comps = ds_ps.filter(qualifier=xqualifier, check_visible=True).components
                     for ds_comp in ds_comps:
-                        ds_x = ds_ps.get_value(qualifier=xqualifier, component=ds_comp, **_skip_filter_checks)
-                        ds_y = ds_ps.get_value(qualifier=yqualifier, component=ds_comp, **_skip_filter_checks)
-                        ds_sigmas = ds_ps.get_value(qualifier='sigmas', component=ds_comp, **_skip_filter_checks)
+                        ds_x = ds_ps.get_value(qualifier=xqualifier, component=ds_comp)
+                        ds_y = ds_ps.get_value(qualifier=yqualifier, component=ds_comp)
+                        ds_sigmas = ds_ps.get_value(qualifier='sigmas', component=ds_comp)
                         # NOTE: if we're supporting GPs on RVs, we should only require at least ONE component to have len(ds_x)
                         if not len(ds_y) or len(ds_sigmas) != len(ds_x) or len(ds_y) != len(ds_x) or (ds_ps.kind in ['lc'] and not len(ds_x)):
                             report.add_item(self,
                                             "gaussian process requires observational data and sigmas",
-                                            ds_ps.filter(qualifier=[xqualifier, yqualifier, 'sigmas'], component=ds_comp, **_skip_filter_checks).to_list()+
-                                            self.filter(qualifier='enabled', feature=compute_enabled_gps, compute=compute, **_skip_filter_checks).to_list()+
+                                            ds_ps.filter(qualifier=[xqualifier, yqualifier, 'sigmas'], component=ds_comp).to_list()+
+                                            self.filter(qualifier='enabled', feature=compute_enabled_gps, compute=compute).to_list()+
                                             addl_parameters,
                                             True, 'run_compute')
 
                 # check for mixing GP backends
-                gps_sklearn = self.filter(kind=['gp_sklearn'], context='feature', **_skip_filter_checks).features
+                gps_sklearn = self.filter(kind=['gp_sklearn'], context='feature').features
                 gps_sklearn_enabled = self.filter(qualifier='enabled', compute=compute, feature=gps_sklearn, value=True,  **_skip_filter_checks).features
 
                 gps_celerite2 = self.filter(kind=['gp_celerite2'], context='feature',  **_skip_filter_checks).features
@@ -4182,34 +4177,34 @@ class Bundle(ParameterSet):
 
             # 2.2 disables support for boosting.  The boosting parameter in 2.2 only has 'none' as an option, but
             # importing a bundle from old releases may still have 'linear' as an option, so we'll check here
-            if compute_kind in ['phoebe'] and self.get_value(qualifier='boosting_method', compute=compute, boosting_method=kwargs.get('boosting_method', None), default='none', **_skip_filter_checks) != 'none':
+            if compute_kind in ['phoebe'] and self.get_value(qualifier='boosting_method', compute=compute, boosting_method=kwargs.get('boosting_method', None), default='none') != 'none':
                 report.add_item(self,
                                 "support for interpolated ('linear') beaming/boosting in compute options has been removed since PHOEBE 2.2.  'manual' boosting is now supported in the dataset options instead.",
-                                [self.get_parameter(qualifier='boosting_method', compute=compute, boosting_method=kwargs.get('boosting_method', None), **_skip_filter_checks)
+                                [self.get_parameter(qualifier='boosting_method', compute=compute, boosting_method=kwargs.get('boosting_method', None))
                                 ]+addl_parameters,
                                 True, 'run_compute')
 
             # misalignment checks
-            if compute_kind != 'phoebe' and np.any([p.get_value() != 0 for p in self.filter(qualifier=['pitch', 'yaw'], context='component', **_skip_filter_checks).to_list()]):
+            if compute_kind != 'phoebe' and np.any([p.get_value() != 0 for p in self.filter(qualifier=['pitch', 'yaw'], context='component').to_list()]):
                 # then we have a misaligned system in an alternate backend
                 if compute_kind == 'ellc':
-                    if np.all([p.get_value(distortion_method=kwargs.get('distortion_method')) == 'sphere' for p in self.filter(qualifier='distortion_method', compute=compute, context='compute', **_skip_filter_checks).to_list()]):
+                    if np.all([p.get_value(distortion_method=kwargs.get('distortion_method')) == 'sphere' for p in self.filter(qualifier='distortion_method', compute=compute, context='compute').to_list()]):
                         # then misalignment is supported, but we'll raise a warning that it only handles RM in RVs
                         report.add_item(self,
                                         "ellc (compute='{}') only considers misalginment for the Rossiter-McLaughlin contribution to RVs".format(compute),
-                                        self.filter(qualifier=['pitch', 'yaw'], context='component', **_skip_filter_checks).to_list()+addl_parameters,
+                                        self.filter(qualifier=['pitch', 'yaw'], context='component').to_list()+addl_parameters,
                                         False, 'run_compute')
                     else:
                         report.add_item(self,
                                         "ellc (compute='{}') only supports misalignment (for Rossiter-McLaughlin contribution to RVs) with distortion_method='sphere'".format(compute),
-                                        self.filter(qualifier=['pitch', 'yaw'], context='component', **_skip_filter_checks).to_list()+
-                                        self.filter(qualifier='distortion_method', compute=compute, context='compute', **_skip_filter_checks).to_list()+addl_parameters,
+                                        self.filter(qualifier=['pitch', 'yaw'], context='component').to_list()+
+                                        self.filter(qualifier='distortion_method', compute=compute, context='compute').to_list()+addl_parameters,
                                         True, 'run_compute')
                 else:
                     report.add_item(self,
                                     "compute='{}' with kind {} does not support misalignment".format(compute, compute_kind),
-                                    self.filter(qualifier=['pitch', 'yaw'], context='component', **_skip_filter_checks).to_list()+
-                                    self.filter(qualifier='distortion_method', compute=compute, context='compute', **_skip_filter_checks).to_list()+addl_parameters,
+                                    self.filter(qualifier=['pitch', 'yaw'], context='component').to_list()+
+                                    self.filter(qualifier='distortion_method', compute=compute, context='compute').to_list()+addl_parameters,
                                     True, 'run_compute')
 
             # mesh-consistency checks
@@ -4223,22 +4218,22 @@ class Bundle(ParameterSet):
 
             # estimate if any body is smaller than any other body's triangles, using a spherical assumption
             if compute_kind=='phoebe' and 'wd' not in mesh_methods:
-                eclipse_method = self.get_value(qualifier='eclipse_method', compute=compute, eclipse_method=kwargs.get('eclipse_method', None), **_skip_filter_checks)
+                eclipse_method = self.get_value(qualifier='eclipse_method', compute=compute, eclipse_method=kwargs.get('eclipse_method', None))
                 if eclipse_method == 'only_horizon':
                     # no need to check triangle sizes
                     continue
 
                 areas = {comp: _get_proj_area(comp) for comp in hier_meshables}
-                triangle_areas = {comp: _get_surf_area(comp)/self.get_value(qualifier='ntriangles', component=comp, compute=compute, **_skip_filter_checks) for comp in hier_meshables}
+                triangle_areas = {comp: _get_surf_area(comp)/self.get_value(qualifier='ntriangles', component=comp, compute=compute) for comp in hier_meshables}
                 if max(triangle_areas.values()) > 5*min(areas.values()):
                     if max(triangle_areas.values()) > 2*min(areas.values()):
                         offending_components = [comp for comp in triangle_areas.keys() if triangle_areas[comp] > 2*min(areas.values())]
                         smallest_components = [comp for comp in areas.keys() if areas[comp] == min(areas.values())]
                         report.add_item(self,
                                         "triangles on {} may be larger than the entire bodies of {}, resulting in inaccurate eclipse detection.  Check values for requiv of {} and/or ntriangles of {}.  If your system is known to NOT eclipse, you can set eclipse_method to 'only_horizon' to circumvent this check.".format(offending_components, smallest_components, smallest_components, offending_components),
-                                        self.filter(qualifier='requiv', component=smallest_components, **_skip_filter_checks).to_list()+
-                                        self.filter(qualifier='ntriangles', component=offending_components, compute=compute, **_skip_filter_checks).to_list()+[
-                                        self.get_parameter(qualifier='eclipse_method', compute=compute, **_skip_filter_checks)
+                                        self.filter(qualifier='requiv', component=smallest_components).to_list()+
+                                        self.filter(qualifier='ntriangles', component=offending_components, compute=compute).to_list()+[
+                                        self.get_parameter(qualifier='eclipse_method', compute=compute)
                                         ]+addl_parameters,
                                         True, 'run_compute')
 
@@ -4249,24 +4244,24 @@ class Bundle(ParameterSet):
                         report.add_item(self,
                                         "triangles on {} are nearly the size of the entire bodies of {}, resulting in inaccurate eclipse detection.  Check values for requiv of {} and/or ntriangles of {}.  If your system is known to NOT eclipse, you can set eclipse_method to 'only_horizon' to circumvent this check.".format(offending_components, smallest_components, smallest_components, offending_components),
                                         self.filter(qualifier='requiv', component=smallest_components).to_list()+
-                                        self.filter(qualifier='ntriangles', component=offending_components, compute=compute, **_skip_filter_checks).to_list()+[
-                                        self.get_parameter(qualifier='eclipse_method', compute=compute, eclipse_method=kwargs.get('eclipse_method', None), **_skip_filter_checks)
+                                        self.filter(qualifier='ntriangles', component=offending_components, compute=compute).to_list()+[
+                                        self.get_parameter(qualifier='eclipse_method', compute=compute, eclipse_method=kwargs.get('eclipse_method', None))
                                         ]+addl_parameters,
                                         False, 'run_compute')
 
             # ellc-specific checks
             if compute_kind == 'ellc':
-                irrad_method = self.get_value(qualifier='irrad_method', compute=compute, context='compute', **_skip_filter_checks)
-                rv_datasets = self.filter(kind='rv', context='dataset', **_skip_filter_checks).datasets
-                rv_datasets_enabled = self.filter(qualifier='enabled', dataset=rv_datasets, compute=compute, context='compute', value=True, **_skip_filter_checks).datasets
+                irrad_method = self.get_value(qualifier='irrad_method', compute=compute, context='compute')
+                rv_datasets = self.filter(kind='rv', context='dataset').datasets
+                rv_datasets_enabled = self.filter(qualifier='enabled', dataset=rv_datasets, compute=compute, context='compute', value=True).datasets
                 if irrad_method != 'none' and len(rv_datasets_enabled):
                     # then we can't allow albedos with flux-weighted RVs
                     offending_components = []
                     offending_datasets = []
                     for dataset in rv_datasets_enabled:
                         for component in hier_stars:
-                            rv_method = self.get_value(qualifier='rv_method', compute=compute, component=component, dataset=dataset, context='compute', **_skip_filter_checks)
-                            if rv_method != 'dynamical' and self.get_value(qualifier='irrad_frac_refl_bol', component=component, context='component', **_skip_filter_checks) > 0:
+                            rv_method = self.get_value(qualifier='rv_method', compute=compute, component=component, dataset=dataset, context='compute')
+                            if rv_method != 'dynamical' and self.get_value(qualifier='irrad_frac_refl_bol', component=component, context='component') > 0:
                                 if component not in offending_components:
                                     offending_components.append(component)
                                 if dataset not in offending_datasets:
@@ -4275,14 +4270,14 @@ class Bundle(ParameterSet):
                     if len(offending_components) and len(offending_datasets):
                         report.add_item(self,
                                         "ellc does not support irradiation with flux-weighted RVs.  Disable irradiation, use dynamical RVs, or set irrad_frac_refl_bol to 0.",
-                                        self.filter(qualifier='irrad_method', compute=compute, context='compute', **_skip_filter_checks).to_list()+
-                                        self.filter(qualifier='rv_method', compute=compute, component=offending_components, dataset=offending_datasets, context='compute', **_skip_filter_checks).to_list()+
-                                        self.filter(qualifier='enabled', kind='rv', compute=compute, dataset=offending_datasets, context='compute', value=True, **_skip_filter_checks).to_list()+
-                                        self.filter(qualifier='irrad_frac_refl_bol', component=offending_components, context='component', **_skip_filter_checks).to_list()+
+                                        self.filter(qualifier='irrad_method', compute=compute, context='compute').to_list()+
+                                        self.filter(qualifier='rv_method', compute=compute, component=offending_components, dataset=offending_datasets, context='compute').to_list()+
+                                        self.filter(qualifier='enabled', kind='rv', compute=compute, dataset=offending_datasets, context='compute', value=True).to_list()+
+                                        self.filter(qualifier='irrad_frac_refl_bol', component=offending_components, context='component').to_list()+
                                         addl_parameters,
                                         True, 'run_compute')
 
-                dpdt_non_zero = [p for p in self.filter(qualifier='dpdt', context='component', **_skip_filter_checks).to_list() if p.get_value() != 0]
+                dpdt_non_zero = [p for p in self.filter(qualifier='dpdt', context='component').to_list() if p.get_value() != 0]
                 if len(dpdt_non_zero):
                     report.add_item(self,
                                     "ellc does not support orbital period time-derivative",
@@ -4291,28 +4286,28 @@ class Bundle(ParameterSet):
 
             # jktebop-specific checks
             if compute_kind == 'jktebop':
-                requiv_max_limit = self.get_value(qualifier='requiv_max_limit', compute=compute, context='compute', requiv_max_limit=kwargs.get('requiv_max_limit', None), **_skip_filter_checks)
+                requiv_max_limit = self.get_value(qualifier='requiv_max_limit', compute=compute, context='compute', requiv_max_limit=kwargs.get('requiv_max_limit', None))
                 for component in hier_stars:
-                    requiv = self.get_value(qualifier='requiv', component=component, context='component', unit=u.solRad, **_skip_filter_checks)
-                    requiv_max = self.get_value(qualifier='requiv_max', component=component, context='component', unit=u.solRad, **_skip_filter_checks)
+                    requiv = self.get_value(qualifier='requiv', component=component, context='component', unit=u.solRad)
+                    requiv_max = self.get_value(qualifier='requiv_max', component=component, context='component', unit=u.solRad)
 
                     if requiv > requiv_max_limit * requiv_max:
                         report.add_item(self,
                                         "requiv@{} ({}) > requiv_max_limit ({}) * requiv_max ({}): past user-set limit for allowed distortion for jktebop (compute='{}')".format(component, requiv, requiv_max_limit, requiv_max, compute),
-                                        self.filter(qualifier='requiv_max_limit', compute=compute, context='compute', **_skip_filter_checks).to_list()+
-                                        self.filter(qualifier=['requiv', 'requiv_max'], component=component, context='component', **_skip_filter_checks).to_list()+
-                                        self.filter(qualifier=['sma'], component=self.hierarchy.get_parent_of(component), context='component', **_skip_filter_checks).to_list()+
+                                        self.filter(qualifier='requiv_max_limit', compute=compute, context='compute').to_list()+
+                                        self.filter(qualifier=['requiv', 'requiv_max'], component=component, context='component').to_list()+
+                                        self.filter(qualifier=['sma'], component=self.hierarchy.get_parent_of(component), context='component').to_list()+
                                         addl_parameters,
                                         True, 'run_compute')
 
-                dperdt_non_zero = [p for p in self.filter(qualifier='dperdt', context='component', **_skip_filter_checks).to_list() if p.get_value() != 0]
+                dperdt_non_zero = [p for p in self.filter(qualifier='dperdt', context='component').to_list() if p.get_value() != 0]
                 if len(dperdt_non_zero):
                     report.add_item(self,
                                     "jktebop does not support apsidal motion",
                                     dperdt_non_zero+addl_parameters,
                                     False, 'run_compute')
 
-                dpdt_non_zero = [p for p in self.filter(qualifier='dpdt', context='component', **_skip_filter_checks).to_list() if p.get_value() != 0]
+                dpdt_non_zero = [p for p in self.filter(qualifier='dpdt', context='component').to_list() if p.get_value() != 0]
                 if len(dpdt_non_zero):
                     report.add_item(self,
                                     "jktebop does not support orbital period time-derivative",
@@ -4398,10 +4393,10 @@ class Bundle(ParameterSet):
         report = kwargs.pop('report', RunChecksReport())
         addl_parameters = kwargs.pop('addl_parameters', [])
 
-        run_checks_solver = self.get_value(qualifier='run_checks_solver', context='setting', default='*', expand=True, **_skip_filter_checks)
+        run_checks_solver = self.get_value(qualifier='run_checks_solver', context='setting', default='*', expand=True)
         if solver is None:
             solvers = run_checks_solver
-            addl_parameters += [self.get_parameter(qualifier='run_checks_solver', context='setting', **_skip_filter_checks)]
+            addl_parameters += [self.get_parameter(qualifier='run_checks_solver', context='setting')]
         else:
             solvers = solver
             if isinstance(solvers, str):
@@ -4422,7 +4417,7 @@ class Bundle(ParameterSet):
         is_cb = len(self.hierarchy.get_envelopes()) > 0
 
         for solver in solvers:
-            solver_ps = self.get_solver(solver=solver, **_skip_filter_checks)
+            solver_ps = self.get_solver(solver=solver)
             solver_kind = solver_ps.kind
 
             if is_single and solver_kind in ['lc_geometry', 'ebai', 'rv_geometry']:
@@ -4440,12 +4435,12 @@ class Bundle(ParameterSet):
 
 
             if 'use_server' in solver_ps.qualifiers and run_checks_server:
-                use_server = kwargs.get('use_server', solver_ps.get_value(qualifier='use_server', **_skip_filter_checks))
-                addl_parameters = [solver_ps.get_parameter(qualifier='use_server', **_skip_filter_checks)]
+                use_server = kwargs.get('use_server', solver_ps.get_value(qualifier='use_server'))
+                addl_parameters = [solver_ps.get_parameter(qualifier='use_server')]
                 if use_server == 'compute':
-                    compute = solver_ps.get_value(qualifier='compute', compute=kwargs.get('compute', None), **_skip_filter_checks)
-                    use_server = self.get_value(qualifier='use_server', compute=compute, **_skip_filter_checks)
-                    addl_parameters += [self.get_parameter(qualifier='use_server', compute=compute, **_skip_filter_checks)]
+                    compute = solver_ps.get_value(qualifier='compute', compute=kwargs.get('compute', None))
+                    use_server = self.get_value(qualifier='use_server', compute=compute)
+                    addl_parameters += [self.get_parameter(qualifier='use_server', compute=compute)]
 
                 report = self.run_checks_server(server=use_server,
                                                 raise_logger_warning=False,
@@ -4457,7 +4452,7 @@ class Bundle(ParameterSet):
 
             if 'compute' in solver_ps.qualifiers:
                 # NOTE: we can't pass compute as a kwarg to get_value or it will be used as a filter instead... which means technically we can't be sure compute is in self.computes
-                compute = kwargs.get('compute', solver_ps.get_value(qualifier='compute', **_skip_filter_checks))
+                compute = kwargs.get('compute', solver_ps.get_value(qualifier='compute'))
                 if run_checks_compute:
                     if compute not in self.computes:
                         raise ValueError("compute='{}' not in computes".format(compute))
@@ -4467,32 +4462,32 @@ class Bundle(ParameterSet):
                                                      raise_logger_warning=False,
                                                      raise_error=False,
                                                      report=report,
-                                                     addl_parameters=[solver_ps.get_parameter(qualifier='compute', **_skip_filter_checks)],
+                                                     addl_parameters=[solver_ps.get_parameter(qualifier='compute')],
                                                      **{k:v for k,v in kwargs.items() if k not in ['server', 'use_server']})
 
                 # test to make sure solver_times will cover the full dataset for time-dependent systems
                 if self.hierarchy.is_time_dependent(consider_gaussian_process=False):
-                    for dataset in self.filter(qualifier='enabled', compute=compute, context='compute', value=True, **_skip_filter_checks).datasets:
-                        solver_times = self.get_value(qualifier='solver_times', dataset=dataset, context='dataset', **_skip_filter_checks)
+                    for dataset in self.filter(qualifier='enabled', compute=compute, context='compute', value=True).datasets:
+                        solver_times = self.get_value(qualifier='solver_times', dataset=dataset, context='dataset')
                         if solver_times == 'times':
                             continue
 
-                        for param in self.filter(qualifier='times', dataset=dataset, context='dataset', **_skip_filter_checks).to_list():
+                        for param in self.filter(qualifier='times', dataset=dataset, context='dataset').to_list():
                             component = param.component
-                            compute_times = self.get_value(qualifier='compute_times', dataset=param.dataset, context='dataset', **_skip_filter_checks)
-                            times = self.get_value(qualifier='times', dataset=param.dataset, component=param.component, context='dataset', **_skip_filter_checks)
+                            compute_times = self.get_value(qualifier='compute_times', dataset=param.dataset, context='dataset')
+                            times = self.get_value(qualifier='times', dataset=param.dataset, component=param.component, context='dataset')
 
                             if len(times) and len(compute_times) and (min(times) < min(compute_times) or max(times) > max(compute_times)):
 
-                                params = [self.get_parameter(qualifier='solver_times', dataset=dataset, context='dataset', **_skip_filter_checks),
-                                          self.get_parameter(qualifier='times', dataset=dataset, component=component, context='dataset', **_skip_filter_checks),
-                                          self.get_parameter(qualifier='compute_times', dataset=dataset, context='dataset', **_skip_filter_checks)]
+                                params = [self.get_parameter(qualifier='solver_times', dataset=dataset, context='dataset'),
+                                          self.get_parameter(qualifier='times', dataset=dataset, component=component, context='dataset'),
+                                          self.get_parameter(qualifier='compute_times', dataset=dataset, context='dataset')]
 
                                 msg = "'compute_times@{}' must cover full range of 'times@{}', for time-dependent systems with solver_times@{}='{}'.".format(dataset, dataset, dataset, solver_times)
-                                if len(self.get_parameter(qualifier='compute_phases', dataset=dataset, context='dataset', **_skip_filter_checks).constrains):
+                                if len(self.get_parameter(qualifier='compute_phases', dataset=dataset, context='dataset').constrains):
                                     msg += " Consider flipping the 'compute_phases' constraint and providing 'compute_times' instead."
-                                    params += [self.get_parameter(qualifier='compute_phases', dataset=dataset, context='dataset', **_skip_filter_checks),
-                                               self.get_constraint(qualifier='compute_times', dataset=dataset, **_skip_filter_checks)]
+                                    params += [self.get_parameter(qualifier='compute_phases', dataset=dataset, context='dataset'),
+                                               self.get_constraint(qualifier='compute_times', dataset=dataset)]
 
                                 report.add_item(self,
                                                 msg,
@@ -4500,57 +4495,57 @@ class Bundle(ParameterSet):
                                                 True, ['run_solver'])
 
                 # dataset column checks
-                lc_datasets = self.filter(dataset=self.filter(qualifier='enabled', value=True, compute=compute, context='compute', **_skip_filter_checks).datasets, kind='lc', context='dataset', **_skip_filter_checks).datasets
-                rv_datasets = self.filter(dataset=self.filter(qualifier='enabled', value=True, compute=compute, context='compute', **_skip_filter_checks).datasets, kind='rv', context='dataset', **_skip_filter_checks).datasets
+                lc_datasets = self.filter(dataset=self.filter(qualifier='enabled', value=True, compute=compute, context='compute').datasets, kind='lc', context='dataset').datasets
+                rv_datasets = self.filter(dataset=self.filter(qualifier='enabled', value=True, compute=compute, context='compute').datasets, kind='rv', context='dataset').datasets
 
                 for dataset in lc_datasets+rv_datasets:
-                    for time_param in self.filter(qualifier='times', dataset=dataset, context='dataset', **_skip_filter_checks).to_list():
+                    for time_param in self.filter(qualifier='times', dataset=dataset, context='dataset').to_list():
                         component = time_param.component
                         times = time_param.get_value()
 
                         if np.any(np.isnan(times)):
                             report.add_item(self,
                                             "times cannot contain any nans",
-                                            self.filter(qualifier=['times'], dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                                            self.filter(qualifier=['times'], dataset=dataset, component=component, context='dataset')
                                             +addl_parameters,
                                             True, 'run_solver')
 
-                        sigmas = self.get_value(qualifier='sigmas', dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                        sigmas = self.get_value(qualifier='sigmas', dataset=dataset, component=component, context='dataset')
 
                         if time_param.kind == 'lc':
-                            fluxes = self.get_value(qualifier='fluxes', dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                            fluxes = self.get_value(qualifier='fluxes', dataset=dataset, component=component, context='dataset')
                             if np.any(np.isnan(fluxes)):
                                 report.add_item(self,
                                                 "fluxes cannot contain any nans",
-                                                self.filter(qualifier=['fluxes'], dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                                                self.filter(qualifier=['fluxes'], dataset=dataset, component=component, context='dataset')
                                                 +addl_parameters,
                                                 True, 'run_solver')
 
                         elif time_param.kind == 'rv':
-                            rvs = self.get_value(qualifier='rvs', dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                            rvs = self.get_value(qualifier='rvs', dataset=dataset, component=component, context='dataset')
                             if np.any(np.isnan(rvs)):
                                 report.add_item(self,
                                                 "rvs cannot contain any nans",
-                                                self.filter(qualifier=['rvs'], dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                                                self.filter(qualifier=['rvs'], dataset=dataset, component=component, context='dataset')
                                                 +addl_parameters,
                                                 True, 'run_solver')
 
                         if np.any(np.isnan(sigmas)):
                             report.add_item(self,
                                             "sigmas cannot contain any nans",
-                                            self.filter(qualifier=['sigmas'], dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                                            self.filter(qualifier=['sigmas'], dataset=dataset, component=component, context='dataset')
                                             +addl_parameters,
                                             True, 'run_solver')
 
                         if np.any(sigmas==0):
                             report.add_item(self,
                                             "sigmas cannot contain zeros",
-                                            self.filter(qualifier=['sigmas'], dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                                            self.filter(qualifier=['sigmas'], dataset=dataset, component=component, context='dataset')
                                             +addl_parameters,
                                             True, 'run_solver')
 
                 # this check can/should be removed in PHOEBE 2.5
-                for param in self.filter(qualifier='sigmas_lnf', dataset=rv_datasets, context='dataset', **_skip_filter_checks).to_list():
+                for param in self.filter(qualifier='sigmas_lnf', dataset=rv_datasets, context='dataset').to_list():
                     if np.isfinite(param.get_value()):
                         report.add_item(self,
                                         "behavior of sigmas_lnf for RVs was changed (fixed) in PHOEBE 2.4.15 to be independent of the RV value.  See https://github.com/phoebe-project/phoebe2/pull/901",
@@ -4559,106 +4554,106 @@ class Bundle(ParameterSet):
 
 
             if 'lc_datasets' in solver_ps.qualifiers:
-                lc_datasets = solver_ps.get_value(qualifier='lc_datasets', lc_datasets=kwargs.get('lc_datasets', None), expand=True, **_skip_filter_checks)
+                lc_datasets = solver_ps.get_value(qualifier='lc_datasets', lc_datasets=kwargs.get('lc_datasets', None), expand=True)
                 if not len(lc_datasets):
                     report.add_item(self,
                                     "no valid datasets in lc_datasets",
-                                    [solver_ps.get_parameter(qualifier='lc_datasets', **_skip_filter_checks)
+                                    [solver_ps.get_parameter(qualifier='lc_datasets')
                                     ]+addl_parameters,
                                     True, 'run_solver')
 
                 for dataset in lc_datasets:
                     component = None
-                    sigmas = self.get_value(qualifier='sigmas', dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                    sigmas = self.get_value(qualifier='sigmas', dataset=dataset, component=component, context='dataset')
 
                     if np.any(np.isnan(sigmas)):
                         report.add_item(self,
                                         "sigmas cannot contain any nans",
-                                        self.filter(qualifier=['sigmas'], dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                                        self.filter(qualifier=['sigmas'], dataset=dataset, component=component, context='dataset')
                                         +addl_parameters,
                                         True, 'run_solver')
 
                     if np.any(sigmas==0):
                         report.add_item(self,
                                         "sigmas cannot contain zeros",
-                                        self.filter(qualifier=['sigmas'], dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                                        self.filter(qualifier=['sigmas'], dataset=dataset, component=component, context='dataset')
                                         +addl_parameters,
                                         True, 'run_solver')
 
 
             elif 'compute' in solver_ps.qualifiers:
-                lc_datasets = self.filter(dataset=self.filter(qualifier='enabled', value=True, compute=compute, context='compute', **_skip_filter_checks).datasets, kind='lc', context='dataset', **_skip_filter_checks).datasets
+                lc_datasets = self.filter(dataset=self.filter(qualifier='enabled', value=True, compute=compute, context='compute').datasets, kind='lc', context='dataset').datasets
             else:
-                lc_datasets = self.filter(kind='lc', context='dataset', **_skip_filter_checks).datasets
+                lc_datasets = self.filter(kind='lc', context='dataset').datasets
 
             if 'rv_datasets' in solver_ps.qualifiers:
-                rv_datasets = solver_ps.get_value(qualifier='rv_datasets', rv_datasets=kwargs.get('rv_datasets', None), expand=True, **_skip_filter_checks)
+                rv_datasets = solver_ps.get_value(qualifier='rv_datasets', rv_datasets=kwargs.get('rv_datasets', None), expand=True)
                 if not len(rv_datasets):
                     report.add_item(self,
                                     "no valid datasets in rv_datasets",
-                                    [solver_ps.get_parameter(qualifier='rv_datasets', **_skip_filter_checks)
+                                    [solver_ps.get_parameter(qualifier='rv_datasets')
                                     ]+addl_parameters,
                                     True, 'run_solver')
 
                 for dataset in rv_datasets:
-                    for time_param in self.filter(qualifier='times', dataset=dataset, context='dataset', **_skip_filter_checks).to_list():
+                    for time_param in self.filter(qualifier='times', dataset=dataset, context='dataset').to_list():
                         component = time_param.component
                         if not len(time_param.get_value()):
                             continue
-                        sigmas = self.get_value(qualifier='sigmas', dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                        sigmas = self.get_value(qualifier='sigmas', dataset=dataset, component=component, context='dataset')
 
                         if np.any(np.isnan(sigmas)):
                             report.add_item(self,
                                             "sigmas cannot contain any nans",
-                                            self.filter(qualifier=['sigmas'], dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                                            self.filter(qualifier=['sigmas'], dataset=dataset, component=component, context='dataset')
                                             +addl_parameters,
                                             True, 'run_solver')
 
                         if np.any(sigmas==0):
                             report.add_item(self,
                                             "sigmas cannot contain zeros",
-                                            self.filter(qualifier=['sigmas'], dataset=dataset, component=component, context='dataset', **_skip_filter_checks)
+                                            self.filter(qualifier=['sigmas'], dataset=dataset, component=component, context='dataset')
                                             +addl_parameters,
                                             True, 'run_solver')
 
             elif 'compute' in solver_ps.qualifiers:
-                rv_datasets = self.filter(dataset=self.filter(qualifier='enabled', value=True, compute=compute, context='compute', **_skip_filter_checks).datasets, kind='rv', context='dataset', **_skip_filter_checks).datasets
+                rv_datasets = self.filter(dataset=self.filter(qualifier='enabled', value=True, compute=compute, context='compute').datasets, kind='rv', context='dataset').datasets
             else:
-                rv_datasets = self.filter(kind='rv', context='dataset', **_skip_filter_checks).datasets
+                rv_datasets = self.filter(kind='rv', context='dataset').datasets
 
             adjustable_parameters = self.get_adjustable_parameters(exclude_constrained=False, check_visible=False)
 
             if 'fit_parameters' in solver_ps.qualifiers:
-                fit_parameters = solver_ps.get_value(qualifier='fit_parameters', fit_parameters=kwargs.get('fit_parameters', None), expand=True, **_skip_filter_checks)
-                if not len(fit_parameters) and solver_ps.get_value(qualifier='continue_from', continue_from=kwargs.get('continue_from', None), **_skip_filter_checks).lower() == 'none':
+                fit_parameters = solver_ps.get_value(qualifier='fit_parameters', fit_parameters=kwargs.get('fit_parameters', None), expand=True)
+                if not len(fit_parameters) and solver_ps.get_value(qualifier='continue_from', continue_from=kwargs.get('continue_from', None)).lower() == 'none':
                     report.add_item(self,
                                     "no valid parameters in fit_parameters",
-                                    [solver_ps.get_parameter(qualifier='fit_parameters', **_skip_filter_checks)
+                                    [solver_ps.get_parameter(qualifier='fit_parameters')
                                     ]+addl_parameters,
                                     True, 'run_solver')
 
                 for twig in fit_parameters:
                     twig, index = _extract_index_from_string(twig)
-                    fit_parameter = adjustable_parameters.get_parameter(twig=twig, **_skip_filter_checks)
+                    fit_parameter = adjustable_parameters.get_parameter(twig=twig)
                     if index is not None:
                         if fit_parameter.__class__.__name__ != 'FloatArrayParameter':
                             report.add_item(self,
                                             "fit_parameters entry {} does not accept index".format(twig),
-                                            [solver_ps.get_parameter(qualifier='fit_parameters', **_skip_filter_checks)
+                                            [solver_ps.get_parameter(qualifier='fit_parameters')
                                             ]+addl_parameters,
                                             True, 'run_solver')
 
                         elif index >= len(fit_parameter.get_value()):
                             report.add_item(self,
                                             "fit_parameters entry {} with length {} index {} out-of-bounds".format(twig, len(fit_parameter.get_value()), index),
-                                            [solver_ps.get_parameter(qualifier='fit_parameters', **_skip_filter_checks)
+                                            [solver_ps.get_parameter(qualifier='fit_parameters')
                                             ]+addl_parameters,
                                             True, 'run_solver')
 
                     if len(fit_parameter.constrained_by):
                         report.add_item(self,
                                         "fit_parameters contains the constrained parameter '{}'".format(twig),
-                                        [solver_ps.get_parameter(qualifier='fit_parameters', **_skip_filter_checks),
+                                        [solver_ps.get_parameter(qualifier='fit_parameters'),
                                          fit_parameter.is_constraint
                                         ]+addl_parameters,
                                         True, 'run_solver')
@@ -4666,18 +4661,18 @@ class Bundle(ParameterSet):
                     if not fit_parameter.is_visible:
                         report.add_item(self,
                                         "fit_parameters contains the invisible parameter '{}'".format(twig),
-                                        [solver_ps.get_parameter(qualifier='fit_parameters', **_skip_filter_checks)]
+                                        [solver_ps.get_parameter(qualifier='fit_parameters')]
                                         +fit_parameter.visible_if_parameters.filter(check_visible=True).to_list()
                                         +addl_parameters,
                                          True, 'run_solver')
 
 
-                fit_ps = adjustable_parameters.filter(twig=fit_parameters, **_skip_filter_checks)
+                fit_ps = adjustable_parameters.filter(twig=fit_parameters)
 
 
             # need check_visible in case hidden by continue_from
             elif 'init_from' in solver_ps.qualifiers:
-                continue_from = solver_ps.get_value(qualifier='continue_from', continue_from=kwargs.get('continue_from', None), default='None', **_skip_filter_checks)
+                continue_from = solver_ps.get_value(qualifier='continue_from', continue_from=kwargs.get('continue_from', None), default='None')
                 if continue_from.lower() != 'none':
                     _, init_from_uniqueids = self.get_distribution_collection(solution=continue_from, keys='uniqueid', return_dc=False)
                 else:
@@ -4686,58 +4681,58 @@ class Bundle(ParameterSet):
                 if not len(init_from_uniqueids):
                     report.add_item(self,
                                     "no valid distributions in init_from",
-                                    [solver_ps.get_parameter(qualifier='init_from', **_skip_filter_checks)
+                                    [solver_ps.get_parameter(qualifier='init_from')
                                     ]+addl_parameters,
                                     True, 'run_solver')
 
-                fit_ps = adjustable_parameters.filter(uniqueid=init_from_uniqueids, **_skip_filter_checks)
+                fit_ps = adjustable_parameters.filter(uniqueid=init_from_uniqueids)
 
             else:
                 fit_ps = None
 
 
             if solver_kind in ['emcee']:
-                continue_from = solver_ps.get_value(qualifier='continue_from', continue_from=kwargs.get('continue_from', None), **_skip_filter_checks)
+                continue_from = solver_ps.get_value(qualifier='continue_from', continue_from=kwargs.get('continue_from', None))
                 if continue_from == 'None':
                     # check to make sure twice as many params as walkers
-                    nwalkers = solver_ps.get_value(qualifier='nwalkers', nwalkers=kwargs.get('nwalkers', None), **_skip_filter_checks)
+                    nwalkers = solver_ps.get_value(qualifier='nwalkers', nwalkers=kwargs.get('nwalkers', None))
 
                     # init_from_uniqueids should already be calculated above in call to get_distribution_collection
                     if nwalkers < 2*len(init_from_uniqueids):
                         # TODO: double check this logic
                         report.add_item(self,
                                         "nwalkers must be at least 2*init_from = {}".format(2*len(init_from_uniqueids)),
-                                        [solver_ps.get_parameter(qualifier='nwalkers', **_skip_filter_checks),
-                                         solver_ps.get_parameter(qualifier='init_from', **_skip_filter_checks)
+                                        [solver_ps.get_parameter(qualifier='nwalkers'),
+                                         solver_ps.get_parameter(qualifier='init_from')
                                         ]+addl_parameters,
                                         True, 'run_solver')
                 else:
-                    continue_from_iter = solver_ps.get_value(qualifier='continue_from_iter', continue_from_iter=kwargs.get('continue_from_iter', None), default=-1, **_skip_filter_checks)
-                    niters = self.get_value(qualifier='niters', solution=continue_from, **_skip_filter_checks)
+                    continue_from_iter = solver_ps.get_value(qualifier='continue_from_iter', continue_from_iter=kwargs.get('continue_from_iter', None), default=-1)
+                    niters = self.get_value(qualifier='niters', solution=continue_from)
                     if abs(continue_from_iter) > niters:
                         report.add_item(self,
                                         "abs(continue_from_iter) must not be larger than completed niters@{}={}".format(continue_from, niters),
-                                        [solver_ps.get_parameter(qualifier='continue_from_iter', **_skip_filter_checks),
-                                         solver_ps.get_parameter(qualifier='continue_from', **_skip_filter_checks),
+                                        [solver_ps.get_parameter(qualifier='continue_from_iter'),
+                                         solver_ps.get_parameter(qualifier='continue_from'),
                                         ]+addl_parameters,
                                         True, 'run_solver')
 
             if solver_kind in ['emcee', 'dynesty']:
-                offending_parameters = self.filter(qualifier='pblum_mode', dataset=lc_datasets+rv_datasets, value='dataset-scaled', **_skip_filter_checks)
+                offending_parameters = self.filter(qualifier='pblum_mode', dataset=lc_datasets+rv_datasets, value='dataset-scaled')
                 if len(offending_parameters.to_list()):
                     report.add_item(self,
                                     "sampling with dataset-scaled can cause unintended issues.  Consider using component-coupled and marginalizing over pblum",
                                     offending_parameters.to_list()+
-                                    [solver_ps.get_parameter(qualifier='priors' if solver_kind in ['dynesty'] else 'init_from', **_skip_filter_checks)]+
+                                    [solver_ps.get_parameter(qualifier='priors' if solver_kind in ['dynesty'] else 'init_from')]+
                                     addl_parameters,
                                     False, 'run_solver')
 
 
 
-            init_from = self.get_value(qualifier='init_from', solver=solver, context='solver', init_from=kwargs.get('init_from', None), default=[], expand=True, **_skip_filter_checks)
+            init_from = self.get_value(qualifier='init_from', solver=solver, context='solver', init_from=kwargs.get('init_from', None), default=[], expand=True)
             for dist_or_solution in init_from:
                 if dist_or_solution in self.distributions:
-                    for distribution_param in self.filter(distribution=dist_or_solution, context='distribution', **_skip_filter_checks).to_list():
+                    for distribution_param in self.filter(distribution=dist_or_solution, context='distribution').to_list():
                         ref_param = distribution_param.get_referenced_parameter()
                         if len(ref_param.constrained_by):
                             # we'll raise an error if a delta distribution (i.e. probably not from a sampler)
@@ -4750,14 +4745,14 @@ class Bundle(ParameterSet):
                                             [distribution_param,
                                             ref_param,
                                             ref_param.is_constraint,
-                                            self.get_parameter(qualifier='init_from', solver=solver, context='solver', **_skip_filter_checks)
+                                            self.get_parameter(qualifier='init_from', solver=solver, context='solver')
                                             ]+addl_parameters,
                                             True, 'run_solver')
 
                         if not ref_param.is_visible:
                             report.add_item(self,
                                             "{} is not a visible parameter, so cannot be included in init_from='{}'.".format(ref_param.twig, dist_or_solution),
-                                            [solver_ps.get_parameter(qualifier='init_from', **_skip_filter_checks)]
+                                            [solver_ps.get_parameter(qualifier='init_from')]
                                             +ref_param.visible_if_parameters.filter(check_visible=True).to_list()
                                             +addl_parameters,
                                              True, 'run_solver')
@@ -4767,17 +4762,17 @@ class Bundle(ParameterSet):
                             if index >= len(ref_param.get_value()):
                                 report.add_item(self,
                                                 "{}@{} in init_from@{} references an index ({}) that is out of range for {}".format(distribution_param.qualifier, dist_or_solution, solver, index, ref_param.twig),
-                                                [solver_ps.get_parameter(qualifier='init_from', **_skip_filter_checks)]
+                                                [solver_ps.get_parameter(qualifier='init_from')]
                                                 +[ref_param, distribution_param]
                                                 +addl_parameters,
                                                 True, 'run_solver')
 
                 elif dist_or_solution in self.solutions:
-                    solution_ps = self.get_solution(solution=dist_or_solution, **_skip_filter_checks)
-                    fitted_uniqueids = solution_ps.get_value(qualifier='fitted_uniqueids', **_skip_filter_checks)
-                    adopt_parameters = solution_ps.get_value(qualifier='adopt_parameters', **_skip_filter_checks)
-                    fitted_ps = self.filter(uniqueid=[str(u) for u in fitted_uniqueids], **_skip_filter_checks)
-                    for param in fitted_ps.filter(twig=adopt_parameters, **_skip_filter_checks).to_list():
+                    solution_ps = self.get_solution(solution=dist_or_solution)
+                    fitted_uniqueids = solution_ps.get_value(qualifier='fitted_uniqueids')
+                    adopt_parameters = solution_ps.get_value(qualifier='adopt_parameters')
+                    fitted_ps = self.filter(uniqueid=[str(u) for u in fitted_uniqueids])
+                    for param in fitted_ps.filter(twig=adopt_parameters).to_list():
                         if len(param.constrained_by):
                             # we'll raise an error if not a sampler (i.e. if values would be adopted by default)
                             # but only a warning for samplers (i.e. distributions would be adopted by default)
@@ -4788,14 +4783,14 @@ class Bundle(ParameterSet):
                                             msg,
                                             [param,
                                              param.is_constraint,
-                                             self.get_parameter(qualifier='init_from', solver=solver, context='solver', **_skip_filter_checks)
+                                             self.get_parameter(qualifier='init_from', solver=solver, context='solver')
                                              ]+addl_parameters,
                                              True, 'run_solver')
 
                         if not ref_param.is_visible:
                             report.add_item(self,
                                             "{} is not a visible parameter, so cannot be included in init_from='{}'.".format(ref_param.twig, dist_or_solution),
-                                            [solver_ps.get_parameter(qualifier='init_from', **_skip_filter_checks)]
+                                            [solver_ps.get_parameter(qualifier='init_from')]
                                             +ref_param.visible_if_parameters.filter(check_visible=True).to_list()
                                             +addl_parameters,
                                              True, 'run_solver')
@@ -4803,9 +4798,9 @@ class Bundle(ParameterSet):
                 else:
                     raise ValueError("{} could not be found in distributions or solutions".format(dist_or_solution))
 
-            priors = self.get_value(qualifier='priors', solver=solver, context='solver', init_from=kwargs.get('priors', None), default=[], expand=True, **_skip_filter_checks)
+            priors = self.get_value(qualifier='priors', solver=solver, context='solver', init_from=kwargs.get('priors', None), default=[], expand=True)
             for dist in priors:
-                for distribution_param in self.filter(distribution=dist, context='distribution', **_skip_filter_checks).to_list():
+                for distribution_param in self.filter(distribution=dist, context='distribution').to_list():
                     ref_param = distribution_param.get_referenced_parameter()
 
                     _, index = _extract_index_from_string(distribution_param.qualifier)
@@ -4813,7 +4808,7 @@ class Bundle(ParameterSet):
                         if index >= len(ref_param.get_value()):
                             report.add_item(self,
                                             "{}@{} in priors@{} references an index ({}) that is out of range for {}".format(distribution_param.qualifier, dist, solver, index, ref_param.twig),
-                                            [solver_ps.get_parameter(qualifier='priors', **_skip_filter_checks)]
+                                            [solver_ps.get_parameter(qualifier='priors')]
                                             +[ref_param, distribution_param]
                                             +addl_parameters,
                                             True, 'run_solver')
@@ -4822,14 +4817,14 @@ class Bundle(ParameterSet):
             offending_parameters = []
             for dist_or_solution in priors:
                 if dist_or_solution in self.distributions:
-                    for distribution_param in self.filter(distribution=dist_or_solution, context='distribution', **_skip_filter_checks).to_list():
+                    for distribution_param in self.filter(distribution=dist_or_solution, context='distribution').to_list():
                         if 'Around' in distribution_param.get_value().__class__.__name__:
                             offending_parameters.append(distribution_param)
 
             if len(offending_parameters):
                 report.add_item(self,
                                 "priors@{} includes \"around\" distributions.  Note that the central values of these distributions will update to the current face-values of the parameters (use with caution for priors)".format(solver),
-                                [solver_ps.get_parameter(qualifier='priors', **_skip_filter_checks)]
+                                [solver_ps.get_parameter(qualifier='priors')]
                                 +offending_parameters
                                 +addl_parameters,
                                 False, 'run_solver')
@@ -4837,31 +4832,31 @@ class Bundle(ParameterSet):
 
             ## warning if fitting a parameter that affects phasing but mask_phases is enabled
             if fit_ps is not None:
-                fit_parameters_ephemeris = fit_ps.filter(qualifier=['period', 'per0', 't0*'], context='component', component=self.hierarchy.get_top(), **_skip_filter_checks)
+                fit_parameters_ephemeris = fit_ps.filter(qualifier=['period', 'per0', 't0*'], context='component', component=self.hierarchy.get_top())
                 if len(fit_parameters_ephemeris):
                     offending_datasets = []
                     for dataset in lc_datasets + rv_datasets:
-                        if len(self.get_value(qualifier='mask_phases', dataset=dataset, context='dataset', **_skip_filter_checks)):
+                        if len(self.get_value(qualifier='mask_phases', dataset=dataset, context='dataset')):
                             offending_datasets.append(dataset)
 
                     if len(offending_datasets):
                         report.add_item(self,
                                         "fit_parameters contains a parameter ({}) that affects phasing which could cause issues with mask_phases".format(fit_parameters_ephemeris.qualifiers),
-                                        self.filter(qualifier='mask_phases', dataset=offending_datasets, context='dataset', **_skip_filter_checks).to_list()
-                                        +[solver_ps.get_parameter(qualifier=['fit_parameters', 'init_from'], **_skip_filter_checks)]
+                                        self.filter(qualifier='mask_phases', dataset=offending_datasets, context='dataset').to_list()
+                                        +[solver_ps.get_parameter(qualifier=['fit_parameters', 'init_from'])]
                                         +addl_parameters,
                                         False, 'run_solver')
 
             ## warning if abusing stefan-boltzmann
             if fit_ps is not None and 'compute' in solver_ps.qualifiers:
-                if self.get_value(qualifier='pblum_method', compute=compute, context='compute', default='none', **_skip_filter_checks) == 'stefan-boltzmann':
-                    fit_parameters_pblum_sb = fit_ps.filter(qualifier='pblum', dataset=lc_datasets+rv_datasets, **_skip_filter_checks)
+                if self.get_value(qualifier='pblum_method', compute=compute, context='compute', default='none') == 'stefan-boltzmann':
+                    fit_parameters_pblum_sb = fit_ps.filter(qualifier='pblum', dataset=lc_datasets+rv_datasets)
 
                     if len(fit_parameters_pblum_sb):
                         report.add_item(self,
                                         "pblum_method=stefan-boltzmann is an approximation, fitting for pblum may not be reliable.  Consider removing from {} or setting pblum_method='phoebe' (more expensive).".format('fit_parameters' if 'fit_parameters' in solver_ps.qualifiers else 'init_from'),
-                                        self.filter(qualifier='pblum_method', compute=compute, value='stefan-boltzmann', **_skip_filter_checks)
-                                        +[solver_ps.get_parameter(qualifier=['fit_parameters', 'init_from'], **_skip_filter_checks)]
+                                        self.filter(qualifier='pblum_method', compute=compute, value='stefan-boltzmann')
+                                        +[solver_ps.get_parameter(qualifier=['fit_parameters', 'init_from'])]
                                         +addl_parameters,
                                         False, 'run_solver')
 
@@ -4923,10 +4918,10 @@ class Bundle(ParameterSet):
         report = kwargs.pop('report', RunChecksReport())
         addl_parameters = kwargs.pop('addl_parameters', [])
 
-        run_checks_solution = self.get_value(qualifier='run_checks_solution', context='setting', default='*', expand=True, **_skip_filter_checks)
+        run_checks_solution = self.get_value(qualifier='run_checks_solution', context='setting', default='*', expand=True)
         if solution is None:
             solutions = run_checks_solution
-            addl_parameters += [self.get_parameter(qualifier='run_checks_solution', context='setting', **_skip_filter_checks)]
+            addl_parameters += [self.get_parameter(qualifier='run_checks_solution', context='setting')]
         else:
             solutions = solution
             if isinstance(solutions, str):
@@ -4947,16 +4942,16 @@ class Bundle(ParameterSet):
         # kwargs.setdefault('check_default', False)
 
         for solution in solutions:
-            solution_ps = self.get_solution(solution=solution, **_skip_filter_checks)
+            solution_ps = self.get_solution(solution=solution)
             solution_kind = solution_ps.kind
 
-            adopt_values = solution_ps.get_value(qualifier='adopt_values', adopt_values=kwargs.get('adopt_values', None), **_skip_filter_checks)
-            adopt_distributions = solution_ps.get_value(qualifier='adopt_distributions', adopt_distributions=kwargs.get('adopt_distributions', None), **_skip_filter_checks)
+            adopt_values = solution_ps.get_value(qualifier='adopt_values', adopt_values=kwargs.get('adopt_values', None))
+            adopt_distributions = solution_ps.get_value(qualifier='adopt_distributions', adopt_distributions=kwargs.get('adopt_distributions', None))
             if not adopt_values and not adopt_distributions:
                 report.add_item(self,
                                 "must set at least one of adopt_values or adopt_distributions to True",
-                                [solution_ps.get_parameter(qualifier='adopt_distributions', **_skip_filter_checks),
-                                 solution_ps.get_parameter(qualifier='adopt_values', **_skip_filter_checks)
+                                [solution_ps.get_parameter(qualifier='adopt_distributions'),
+                                 solution_ps.get_parameter(qualifier='adopt_values')
                                  ]+addl_parameters,
                                  True, 'adopt_solution')
 
@@ -4964,34 +4959,34 @@ class Bundle(ParameterSet):
             if not len(adopt_uniqueids):
                 report.add_item(self,
                                 "no parameters set to be adopted",
-                                [solution_ps.get_parameter(qualifier='adopt_parameters', **_skip_filter_checks)
+                                [solution_ps.get_parameter(qualifier='adopt_parameters')
                                 ]+addl_parameters,
                                 True, 'adopt_solution')
 
             if adopt_values:
                 # NOTE: samplers won't have fitted_values so this will default to the empty list
-                fitted_values = solution_ps.get_value(qualifier='fitted_values', default=[], **_skip_filter_checks)
+                fitted_values = solution_ps.get_value(qualifier='fitted_values', default=[])
                 # NOTE: the following list-comprehension is necessary because fitted_values may not be an array of floats/nans
                 if len(fitted_values) and np.any([not isinstance(v,list) and np.isnan(v) for v in fitted_values[adopt_inds]]):
                     report.add_item(self,
                                     "at least one parameter in adopt_parameters includes nan in fitted_values",
-                                    [solution_ps.get_parameter(qualifier='adopt_parameters', **_skip_filter_checks),
-                                     solution_ps.get_parameter(qualifier='fitted_values', **_skip_filter_checks)
+                                    [solution_ps.get_parameter(qualifier='adopt_parameters'),
+                                     solution_ps.get_parameter(qualifier='fitted_values')
                                     ]+addl_parameters,
                                     True, 'adopt_solution')
 
                 if not kwargs.get('trial_run', False):
                     for adopt_uniqueid in adopt_uniqueids:
-                        adopt_param = self.get_parameter(uniqueid=adopt_uniqueid.split('[')[0], **_skip_filter_checks)
+                        adopt_param = self.get_parameter(uniqueid=adopt_uniqueid.split('[')[0])
                         if len(adopt_param.constrained_by):
                             constrained_by_ps = ParameterSet(adopt_param.constrained_by)
                             validsolvefor = [v for v in _constraint._validsolvefor.get(adopt_param.is_constraint.constraint_func, []) if adopt_param.qualifier not in v]
                             if len(validsolvefor) == 1:
-                                solve_for = constrained_by_ps.get_parameter(twig=validsolvefor[0], **_skip_filter_checks)
+                                solve_for = constrained_by_ps.get_parameter(twig=validsolvefor[0])
 
                                 report.add_item(self,
                                                 "{} is currently constrained but will temporarily flip to solve_for='{}'".format(adopt_param.twig, solve_for.twig),
-                                                [solution_ps.get_parameter(qualifier='adopt_parameters', **_skip_filter_checks),
+                                                [solution_ps.get_parameter(qualifier='adopt_parameters'),
                                                  adopt_param.is_constraint
                                                 ]+addl_parameters,
                                                 False, 'adopt_solution')
@@ -4999,8 +4994,8 @@ class Bundle(ParameterSet):
                             else:
                                 report.add_item(self,
                                                 "{} is currently constrained but cannot automatically temporarily flip as solve_for has several options ({}).  Flip the constraint manually first, set adopt_values=False, or remove {} from adopt_parameters.".format(adopt_param.twig, ", ".join([p.twig for p in adopt_param.constrained_by]), adopt_param.twig),
-                                                [solution_ps.get_parameter(qualifier='adopt_parameters', **_skip_filter_checks),
-                                                 solution_ps.get_parameter(qualifier='adopt_values', **_skip_filter_checks),
+                                                [solution_ps.get_parameter(qualifier='adopt_parameters'),
+                                                 solution_ps.get_parameter(qualifier='adopt_values'),
                                                  adopt_param.is_constraint
                                                 ]+addl_parameters,
                                                 True, 'adopt_solution')
@@ -5063,10 +5058,10 @@ class Bundle(ParameterSet):
         report = kwargs.pop('report', RunChecksReport())
         addl_parameters = kwargs.pop('addl_parameters', [])
 
-        run_checks_server = self.get_value(qualifier='run_checks_server', context='setting', default='*', expand=True, **_skip_filter_checks)
+        run_checks_server = self.get_value(qualifier='run_checks_server', context='setting', default='*', expand=True)
         if server is None:
             servers = run_checks_server
-            addl_parameters += [self.get_parameter(qualifier='run_checks_server', context='setting', **_skip_filter_checks)]
+            addl_parameters += [self.get_parameter(qualifier='run_checks_server', context='setting')]
         else:
             servers = server
             if isinstance(servers, str):
@@ -5088,9 +5083,9 @@ class Bundle(ParameterSet):
             if server not in self.servers:
                 raise ValueError("server='{}' not found".format(server))
 
-            crimpl_param = self.get_parameter(qualifier='crimpl_name', server=server, context='server', **_skip_filter_checks)
+            crimpl_param = self.get_parameter(qualifier='crimpl_name', server=server, context='server')
             crimpl_name = crimpl_param.get_value()
-            server_kind = self.get_server(server=server, **_skip_filter_checks).kind
+            server_kind = self.get_server(server=server).kind
             if not len(crimpl_name):
                 if server_kind == 'localthread':
                     report.add_item(self,
@@ -5178,10 +5173,10 @@ class Bundle(ParameterSet):
         report = kwargs.pop('report', RunChecksReport())
         addl_parameters = kwargs.pop('addl_parameters', [])
 
-        run_checks_figure = self.get_value(qualifier='run_checks_figure', context='setting', default='*', expand=True, **_skip_filter_checks)
+        run_checks_figure = self.get_value(qualifier='run_checks_figure', context='setting', default='*', expand=True)
         if figure is None:
             figures = run_checks_figure
-            addl_parameters += [self.get_parameter(qualifier='run_checks_figure', context='setting', **_skip_filter_checks)]
+            addl_parameters += [self.get_parameter(qualifier='run_checks_figure', context='setting')]
         else:
             figures = figure
             if isinstance(figures, str):
@@ -5198,7 +5193,7 @@ class Bundle(ParameterSet):
                                 False
                                 )
 
-        for param in self.filter(context='figure', qualifier='*lim', **_skip_filter_checks).to_list():
+        for param in self.filter(context='figure', qualifier='*lim').to_list():
             if len(param.get_value()) != 2 and param.is_visible:
                 parent_ps = param.get_parent_ps()
                 if '{}_mode' in parent_ps.qualifiers:
@@ -5215,14 +5210,14 @@ class Bundle(ParameterSet):
 
 
         for figure in self.figures:
-            if 'x' in self.filter(figure=figure, context='figure', **_skip_filter_checks).qualifiers:
-                x = self.get_value(qualifier='x', figure=figure, context='figure', **_skip_filter_checks)
-                y = self.get_value(qualifier='y', figure=figure, context='figure', **_skip_filter_checks)
+            if 'x' in self.filter(figure=figure, context='figure').qualifiers:
+                x = self.get_value(qualifier='x', figure=figure, context='figure')
+                y = self.get_value(qualifier='y', figure=figure, context='figure')
                 if (x in ['xs', 'ys', 'zs'] and y in ['us', 'vs', 'ws']) or (x in ['us', 'vs', 'ws'] and y in ['xs', 'ys', 'zs']):
                     report.add_item(self,
                                     "cannot mix xyz and uvw coordinates in {} figure".format(figure),
-                                    [self.get_parameter(qualifier='x', figure=figure, context='figure', **_skip_filter_checks),
-                                     self.get_parameter(qualifier='y', figure=figure, context='figure', **_skip_filter_checks)
+                                    [self.get_parameter(qualifier='x', figure=figure, context='figure'),
+                                     self.get_parameter(qualifier='y', figure=figure, context='figure')
                                     ]+addl_parameters,
                                     False, 'run_figure')
 
@@ -5361,7 +5356,7 @@ class Bundle(ParameterSet):
             elif solver_kind == 'ebai':
                 recs = _add_reason(recs, 'Conroy et al. (2020)', 'ebai solver initially introduced in PHOEBE')
                 recs = _add_reason(recs, 'Kochoska et al. (in prep)', 'ebai solver updates')
-                ebai_method = self.get_value(qualifier='ebai_method', solver=solver, **_skip_filter_checks)
+                ebai_method = self.get_value(qualifier='ebai_method', solver=solver)
                 if solver_kind == 'knn':
                     recs = _add_reason(recs, 'scikit-learn', 'knn implementation for ebai solver')
                 elif solver_kind == 'mlp':
@@ -5392,7 +5387,7 @@ class Bundle(ParameterSet):
         for component in self.hierarchy.get_stars():
             if self.get_value(qualifier='pitch', component=component, context='component') != 0. or self.get_value(qualifier='yaw', component=component, context='component') != 0.:
                 recs = _add_reason(recs, 'Horvat et al. (2018)', 'support for misaligned system')
-        if self.get_value(qualifier='ebv', context='system', **_skip_filter_checks) > 0:
+        if self.get_value(qualifier='ebv', context='system') > 0:
             recs = _add_reason(recs, 'Jones et al. (2020)', 'support for interstellar extinction')
 
         # provide any references from passband tables
@@ -5518,15 +5513,15 @@ class Bundle(ParameterSet):
                 deps_pip.append('emcee')
             elif solver_kind == 'dynesty' and 'dynesty' not in deps_pip:
                 deps_pip.append('dynesty')
-            elif solver_kind == 'ebai' and self.get_value(qualifier='ebai_method', solver=solver, **_skip_filter_checks) == 'knn':
+            elif solver_kind == 'ebai' and self.get_value(qualifier='ebai_method', solver=solver) == 'knn':
                 if 'scikit-learn' not in deps_pip:
                     deps_pip.append('scikit-learn')
 
         # features
-        gp_sklearn_features = self.filter(context='feature', kind='gp_sklearn', **_skip_filter_checks).features
-        gp_sklearn_enabled = len(self.filter(qualifier='enabled', value=True, compute=computes, feature=gp_sklearn_features, **_skip_filter_checks)) > 0
-        gp_celerite2_features = self.filter(context='feature', kind='gp_celerite2', **_skip_filter_checks).features
-        gp_celerite2_enabled = len(self.filter(qualifier='enabled', value=True, compute=computes, feature=gp_celerite2_features, **_skip_filter_checks)) > 0
+        gp_sklearn_features = self.filter(context='feature', kind='gp_sklearn').features
+        gp_sklearn_enabled = len(self.filter(qualifier='enabled', value=True, compute=computes, feature=gp_sklearn_features)) > 0
+        gp_celerite2_features = self.filter(context='feature', kind='gp_celerite2').features
+        gp_celerite2_enabled = len(self.filter(qualifier='enabled', value=True, compute=computes, feature=gp_celerite2_features)) > 0
 
         if gp_sklearn_enabled and 'scikit-learn' not in deps_pip:
             deps_pip.append('scikit-learn')
@@ -5676,7 +5671,7 @@ class Bundle(ParameterSet):
         for constraint in constraints:
             self.add_constraint(*constraint)
 
-        ret_ps = self.filter(feature=kwargs['feature'], **_skip_filter_checks)
+        ret_ps = self.filter(feature=kwargs['feature'])
 
         ret_changes = []
         ret_changes += self._handle_fitparameters_selecttwigparams(return_changes=return_changes)
@@ -6350,10 +6345,10 @@ class Bundle(ParameterSet):
 
         ret = {}
 
-        ps = self.filter(component=component, context='component', **_skip_filter_checks)
+        ps = self.filter(component=component, context='component')
 
         if isinstance(period, str):
-            ret['period'] = ps.get_value(qualifier=period, unit=u.d, **_skip_filter_checks)
+            ret['period'] = ps.get_value(qualifier=period, unit=u.d)
         elif isinstance(period, float) or isinstance(period, int):
             ret['period'] = period
         else:
@@ -6363,9 +6358,9 @@ class Bundle(ParameterSet):
             # TODO: ability to pass period to grab period_sidereal instead?
             if isinstance(t0, str):
                 if t0 == 't0':
-                    ret['t0'] = self.get_value(qualifier='t0', context='system', unit=u.d, **_skip_filter_checks)
+                    ret['t0'] = self.get_value(qualifier='t0', context='system', unit=u.d)
                 else:
-                    ret['t0'] = ps.get_value(qualifier=t0, unit=u.d, **_skip_filter_checks)
+                    ret['t0'] = ps.get_value(qualifier=t0, unit=u.d)
             elif isinstance(t0, float) or isinstance(t0, int):
                 ret['t0'] = t0
             else:
@@ -6376,7 +6371,7 @@ class Bundle(ParameterSet):
             if isinstance(t0, float) or isinstance(t0, int):
                 ret['t0'] = t0
             else:
-                ret['t0'] = self.get_value('t0', context='system', unit=u.d, **_skip_filter_checks)
+                ret['t0'] = self.get_value('t0', context='system', unit=u.d)
         else:
             raise NotImplementedError
 
@@ -6772,7 +6767,7 @@ class Bundle(ParameterSet):
 
 
 
-        if self.get_value(qualifier='auto_add_figure', context='setting', auto_add_figure=kwargs.get('auto_add_figure', None), **_skip_filter_checks) and kind not in self.filter(context='figure', check_visible=False, check_default=False).exclude(figure=[None], check_visible=False, check_default=False).kinds:
+        if self.get_value(qualifier='auto_add_figure', context='setting', auto_add_figure=kwargs.get('auto_add_figure', None)) and kind not in self.filter(context='figure', check_visible=False, check_default=False).exclude(figure=[None], check_visible=False, check_default=False).kinds:
             # then we don't have a figure for this kind yet
             logger.info("calling add_figure(kind='dataset.{}') since auto_add_figure@setting=True".format(kind))
             new_fig_params = self.add_figure(kind='dataset.{}'.format(kind))
@@ -6950,7 +6945,7 @@ class Bundle(ParameterSet):
             conf._interactive_checks = True
             self.run_checks(raise_logger_warning=True)
 
-        ret_ps = self.filter(dataset=kwargs['dataset'], **_skip_filter_checks)
+        ret_ps = self.filter(dataset=kwargs['dataset'])
 
         # since we've already processed (so that we can get the new qualifiers),
         # we'll only raise a warning
@@ -7069,7 +7064,7 @@ class Bundle(ParameterSet):
 
         if self.get_value(qualifier='auto_remove_figure', context='setting'):
             # then we don't have a figure for this kind yet
-            for param in self.filter(qualifier='datasets', context='figure', kind=ret_ps.kind, **_skip_filter_checks).to_list():
+            for param in self.filter(qualifier='datasets', context='figure', kind=ret_ps.kind).to_list():
                 if not len(param.choices):
                     logger.info("calling remove_figure(figure='{}') since auto_remove_figure@setting=True".format(param.figure))
                     ret_changes += self.remove_figure(figure=param.figure, return_changes=return_changes).to_list()
@@ -7134,7 +7129,7 @@ class Bundle(ParameterSet):
         ret_changes += self._handle_figure_time_source_params(return_changes=return_changes)
         ret_changes += self._handle_fitparameters_selecttwigparams(return_changes=return_changes)
 
-        for param in self.filter(context='solution', qualifier='lc', **_skip_filter_checks):
+        for param in self.filter(context='solution', qualifier='lc'):
             if param.get_value() == old_value:
                 param.set_value(new_value)
                 ret_changes += [param]
@@ -7366,7 +7361,7 @@ class Bundle(ParameterSet):
         # we'll just manually flip after to ensure it already does
         if 'solve_for' in kwargs.keys():
             try:
-                kwargs['solve_for'] = self.get_parameter(kwargs['solve_for'], context=['component', 'dataset', 'model', 'system'], **_skip_filter_checks)
+                kwargs['solve_for'] = self.get_parameter(kwargs['solve_for'], context=['component', 'dataset', 'model', 'system'])
             except:
                 solve_for = kwargs.pop('solve_for', None)
             else:
@@ -7814,8 +7809,8 @@ class Bundle(ParameterSet):
         there were failed/delayed constraints, since those are not stored.
         """
         changes = []
-        for constraint_id in [p.uniqueid for p in self.filter(context='constraint', **_skip_filter_checks).to_list()]:
-            previous_value = self.get_parameter(uniqueid=constraint_id, **_skip_filter_checks).constrained_parameter.value
+        for constraint_id in [p.uniqueid for p in self.filter(context='constraint').to_list()]:
+            previous_value = self.get_parameter(uniqueid=constraint_id).constrained_parameter.value
             param = self.run_constraint(uniqueid=constraint_id, return_parameter=True, skip_kwargs_checks=True, suppress_error=False)
             if param not in changes and not _is_equiv_array_or_float(param.value, previous_value):
                 changes.append(param)
@@ -8107,7 +8102,7 @@ class Bundle(ParameterSet):
         if kwargs.get('overwrite_all', False) and return_changes:
             ret_ps += overwrite_ps
 
-        # if self.get_value(qualifier='auto_add_figure', context='setting', auto_add_figure=kwargs.get('auto_add_figure', None), **_skip_filter_checks) and 'distribution_collection' not in self.filter(context='figure', **_skip_filter_checks).kinds:
+        # if self.get_value(qualifier='auto_add_figure', context='setting', auto_add_figure=kwargs.get('auto_add_figure', None)) and 'distribution_collection' not in self.filter(context='figure').kinds:
         #     # then we don't have a figure for this kind yet
         #     logger.info("calling add_figure(kind='distribution.distribution_collection') since auto_add_figure@setting=True")
         #     new_fig_params = self.add_figure(kind='distribution.distribution_collection', distributions=[kwargs['distribution']])
@@ -8245,7 +8240,7 @@ class Bundle(ParameterSet):
             filter_kwargs['context'] = 'distribution'
 
         if not isinstance(twig, list):
-            ps = self.filter(context=['distribution', 'solution', 'solver', 'compute'], **_skip_filter_checks).filter(twig=twig, **filter_kwargs)
+            ps = self.filter(context=['distribution', 'solution', 'solver', 'compute']).filter(twig=twig, **filter_kwargs)
 
             if ps.context == 'compute':
                 if ps.qualifier not in ['sample_from']:
@@ -8283,8 +8278,8 @@ class Bundle(ParameterSet):
 
                         requires = self.get_value(qualifier='init_from_requires', expand=True, check_visible=False, solver=ps.solver)
                         kwargs.setdefault('require_limits', 'limits' in requires)
-                        kwargs.setdefault('require_checks', self.get_value(qualifier='compute', solver=ps.solver, **_skip_filter_checks) if 'checks' in requires else False)
-                        kwargs.setdefault('require_compute', self.get_value(qualifier='compute', solver=ps.solver, **_skip_filter_checks) if 'compute' in requires else False)
+                        kwargs.setdefault('require_checks', self.get_value(qualifier='compute', solver=ps.solver) if 'checks' in requires else False)
+                        kwargs.setdefault('require_compute', self.get_value(qualifier='compute', solver=ps.solver) if 'compute' in requires else False)
                         kwargs.setdefault('require_priors', 'priors@{}'.format(ps.solver) if 'priors' in requires else False)
                     else:
                         raise NotImplementedError("get_distribution_collection for solver kind='{}' and qualifier='{}' not implemented".format(kind, ps.qualifier))
@@ -8297,8 +8292,8 @@ class Bundle(ParameterSet):
 
                         requires = self.get_value(qualifier='priors_requires', expand=True, check_visible=False, solver=ps.solver)
                         kwargs.setdefault('require_limits', 'limits' in requires)
-                        kwargs.setdefault('require_checks', self.get_value(qualifier='compute', solver=ps.solver, **_skip_filter_checks) if 'checks' in requires else False)
-                        kwargs.setdefault('require_compute', self.get_value(qualifier='compute', solver=ps.solver, **_skip_filter_checks) if 'compute' in requires else False)
+                        kwargs.setdefault('require_checks', self.get_value(qualifier='compute', solver=ps.solver) if 'checks' in requires else False)
+                        kwargs.setdefault('require_compute', self.get_value(qualifier='compute', solver=ps.solver) if 'compute' in requires else False)
                         kwargs.setdefault('require_priors', False)
                     else:
                         raise NotImplementedError("get_distribution_collection for solver kind='{}' and qualifier='{}' not implemented".format(kind, ps.qualifier))
@@ -8328,7 +8323,7 @@ class Bundle(ParameterSet):
         filters = []
 
         for twigi in twig:
-            ps = self.filter(context=['distribution', 'solution', 'solver', 'compute'], **_skip_filter_checks).filter(twig=twigi, **filter_kwargs)
+            ps = self.filter(context=['distribution', 'solution', 'solver', 'compute']).filter(twig=twigi, **filter_kwargs)
             for context in ps.contexts:
                 if context == 'distribution':
                     if filter_kwargs.get('distribution', None) is not None and len(filter_kwargs.get('distribution')) == len(ps.distributions):
@@ -8503,10 +8498,10 @@ class Bundle(ParameterSet):
 
             # first filter through the distributions already in dc
             ret_dists = [available_dc.dists[i] for i,uniqueid_with_index in enumerate(available_uniqueids_with_indices) if uniqueid_with_index in parameters_uniqueids_with_indices]
-            ret_keys = [_get_key(self.get_parameter(uniqueid=uniqueid_with_index.split('[')[0], **_skip_filter_checks), keys, index) for uniqueid_with_index, index in zip(available_uniqueids_with_indices, available_indices) if uniqueid_with_index in parameters_uniqueids_with_indices]
+            ret_keys = [_get_key(self.get_parameter(uniqueid=uniqueid_with_index.split('[')[0]), keys, index) for uniqueid_with_index, index in zip(available_uniqueids_with_indices, available_indices) if uniqueid_with_index in parameters_uniqueids_with_indices]
 
             # now we need to get any that weren't included in dc
-            new_params = [self.get_parameter(uniqueid=uniqueid_with_index.split('[')[0], **_skip_filter_checks) for uniqueid_with_index in parameters_uniqueids_with_indices if uniqueid_with_index not in available_uniqueids_with_indices]
+            new_params = [self.get_parameter(uniqueid=uniqueid_with_index.split('[')[0]) for uniqueid_with_index in parameters_uniqueids_with_indices if uniqueid_with_index not in available_uniqueids_with_indices]
             new_indices = [index for index, uniqueid_with_index in zip(parameters_indices, parameters_uniqueids_with_indices) if uniqueid_with_index not in available_uniqueids_with_indices]
             ret_dists += [param.get_distribution(distribution=available_dc, distribution_uniqueids=available_uniqueids, delta_if_none=True) for param in new_params]
             ret_keys += [_get_key(param, keys, index) for param,index in zip(new_params,new_indices)]
@@ -8547,7 +8542,7 @@ class Bundle(ParameterSet):
             # TODO: if * in list, need to expand (currently forbidden with error in get_distribution)
             if 'solution' in dist_filter.keys():
                 # print("*** get_distribution_collection solution dist_filter={}".format(dist_filter))
-                solution_ps = self.get_solution(solution=dist_filter['solution'], **_skip_filter_checks)
+                solution_ps = self.get_solution(solution=dist_filter['solution'])
                 solver_kind = solution_ps.kind
 
                 adopt_inds, adopt_uniqueids = self._get_adopt_inds_uniqueids(solution_ps, **kwargs)
@@ -8555,23 +8550,23 @@ class Bundle(ParameterSet):
                 if not len(adopt_inds):
                     raise ValueError('no parameters selected by adopt_parameters')
 
-                fitted_units = solution_ps.get_value(qualifier='fitted_units', **_skip_filter_checks)
+                fitted_units = solution_ps.get_value(qualifier='fitted_units')
 
                 if solver_kind == 'emcee':
-                    lnprobabilities = solution_ps.get_value(qualifier='lnprobabilities', **_skip_filter_checks)
-                    samples = solution_ps.get_value(qualifier='samples', **_skip_filter_checks)
+                    lnprobabilities = solution_ps.get_value(qualifier='lnprobabilities')
+                    samples = solution_ps.get_value(qualifier='samples')
 
-                    burnin = solution_ps.get_value(qualifier='burnin', burnin=kwargs.get('burnin', None), **_skip_filter_checks)
-                    thin = solution_ps.get_value(qualifier='thin', thin=kwargs.get('thin', None), **_skip_filter_checks)
-                    lnprob_cutoff = solution_ps.get_value(qualifier='lnprob_cutoff', lnprob_cutoff=kwargs.get('lnprob_cutoff', None), **_skip_filter_checks)
+                    burnin = solution_ps.get_value(qualifier='burnin', burnin=kwargs.get('burnin', None))
+                    thin = solution_ps.get_value(qualifier='thin', thin=kwargs.get('thin', None))
+                    lnprob_cutoff = solution_ps.get_value(qualifier='lnprob_cutoff', lnprob_cutoff=kwargs.get('lnprob_cutoff', None))
 
                     lnprobabilities, samples = _helpers.process_mcmc_chains(lnprobabilities, samples, burnin, thin, lnprob_cutoff, adopt_inds)
                     weights = None
 
                 elif solver_kind == 'dynesty':
-                    samples = solution_ps.get_value(qualifier='samples', **_skip_filter_checks)
-                    logwt = solution_ps.get_value(qualifier='logwt', **_skip_filter_checks)
-                    logz = solution_ps.get_value(qualifier='logz', **_skip_filter_checks)
+                    samples = solution_ps.get_value(qualifier='samples')
+                    logwt = solution_ps.get_value(qualifier='logwt')
+                    logz = solution_ps.get_value(qualifier='logz')
 
                     samples = samples[:, adopt_inds]
 
@@ -8581,10 +8576,10 @@ class Bundle(ParameterSet):
                     # then this is an estimator or optimizer, so we just want Delta
                     # distributions around 'fitted_values'
 
-                    fitted_values = solution_ps.get_value(qualifier='fitted_values', **_skip_filter_checks)
+                    fitted_values = solution_ps.get_value(qualifier='fitted_values')
 
                     for fitted_value, fitted_unit, fitted_uniqueid in zip(fitted_values[adopt_inds], fitted_units[adopt_inds], adopt_uniqueids):
-                        param = self.get_parameter(uniqueid=fitted_uniqueid, **_skip_filter_checks)
+                        param = self.get_parameter(uniqueid=fitted_uniqueid)
                         _, index = _extract_index_from_string(fitted_uniqueid)
                         ret_keys += [_get_key(param, keys, index)]
                         if kwargs.get('return_dc', True):
@@ -8594,12 +8589,12 @@ class Bundle(ParameterSet):
                     continue
 
 
-                distributions_convert = solution_ps.get_value(qualifier='distributions_convert', distributions_convert=kwargs.get('distributions_convert', None), **_skip_filter_checks)
-                distributions_bins = solution_ps.get_value(qualifier='distributions_bins', distributions_bins=kwargs.get('distributions_bins', None), **_skip_filter_checks)
+                distributions_convert = solution_ps.get_value(qualifier='distributions_convert', distributions_convert=kwargs.get('distributions_convert', None))
+                distributions_bins = solution_ps.get_value(qualifier='distributions_bins', distributions_bins=kwargs.get('distributions_bins', None))
 
                 adopt_uniqueids_with_indexes = [_extract_index_from_string(uid) for uid in adopt_uniqueids]
-                labels = [_corner_twig(self.get_parameter(uniqueid=uniqueid, **_skip_filter_checks), use_tex=False, index=index) for uniqueid, index in adopt_uniqueids_with_indexes]
-                labels_latex = [_corner_twig(self.get_parameter(uniqueid=uniqueid, **_skip_filter_checks), use_tex=True, index=index) for uniqueid, index in adopt_uniqueids_with_indexes]
+                labels = [_corner_twig(self.get_parameter(uniqueid=uniqueid), use_tex=False, index=index) for uniqueid, index in adopt_uniqueids_with_indexes]
+                labels_latex = [_corner_twig(self.get_parameter(uniqueid=uniqueid), use_tex=True, index=index) for uniqueid, index in adopt_uniqueids_with_indexes]
                 dist_samples = _distl.mvsamples(samples,
                                                 weights=weights,
                                                 units=[u.Unit(unit) for unit in fitted_units[adopt_inds]],
@@ -8622,7 +8617,7 @@ class Bundle(ParameterSet):
                 else:
                     raise NotImplementedError("distributions_convert='{}' not supported".format(distributions_convert))
 
-                ret_keys += [_get_key(self.get_parameter(uniqueid=uniqueid, **_skip_filter_checks), keys, index) for uniqueid, index in zip(*_extract_index_from_string(adopt_uniqueids))]
+                ret_keys += [_get_key(self.get_parameter(uniqueid=uniqueid), keys, index) for uniqueid, index in zip(*_extract_index_from_string(adopt_uniqueids))]
 
                 if len(distribution_filters) == 1 and kwargs.get('allow_non_dc', True):
                     # then try to avoid slicing since we don't have to combine with anything else
@@ -8634,7 +8629,7 @@ class Bundle(ParameterSet):
 
             elif 'distribution' in dist_filter.keys():
                 # print("*** get_distribution_collection distribution dist_filter={}".format(dist_filter))
-                dist_ps = self.get_distribution(distribution=dist_filter['distribution'], **_skip_filter_checks)
+                dist_ps = self.get_distribution(distribution=dist_filter['distribution'])
                 for dist_param in dist_ps.to_list():
                     qualifier, index = _extract_index_from_string(dist_param.qualifier)
                     ref_param = dist_param.get_referenced_parameter()
@@ -8697,7 +8692,7 @@ class Bundle(ParameterSet):
             if require_limits:
                 for i, uniqueid in enumerate(uniqueids):
                     # check if ret_dists[i] is fully within parameter limits
-                    param = self.get_parameter(uniqueid=uniqueid, **_skip_filter_checks)
+                    param = self.get_parameter(uniqueid=uniqueid)
                     if not hasattr(param, 'limits'):
                         continue
                     if np.any([np.isfinite(ret_dists[i].logpdf(limit.value)) for limit in param.limits if limit is not None]):
@@ -8723,7 +8718,7 @@ class Bundle(ParameterSet):
                         continue
 
                     i = uniqueids.index(prior_uniqueid)
-                    param = self.get_parameter(uniqueid=prior_uniqueid, **_skip_filter_checks)
+                    param = self.get_parameter(uniqueid=prior_uniqueid)
                     label = ret_dists[i].label
                     label_latex = ret_dists[i].label_latex
                     if prior.__class__.__name__ == 'Uniform':
@@ -8989,7 +8984,7 @@ class Bundle(ParameterSet):
         changed_params = []
         for sampled_value, uniqueid, unit in zip(sampled_values, uniqueids, [dist.unit for dist in dc.dists]):
             uniqueid, index = _extract_index_from_string(uniqueid)
-            ref_param = self.get_parameter(uniqueid=uniqueid, **_skip_filter_checks)
+            ref_param = self.get_parameter(uniqueid=uniqueid)
 
             if set_value:
                 if index is None:
@@ -9144,7 +9139,7 @@ class Bundle(ParameterSet):
             dc, uniqueids = self.get_distribution_collection(twig=twig, set_labels=set_labels, keys='uniqueid', parameters=parameters, **kwargs)
 
         if 'size' not in plot_kwargs.keys():
-            ps = self.filter(uniqueid=uniqueids, **_skip_filter_checks)
+            ps = self.filter(uniqueid=uniqueids)
             constraint_funcs = [p.is_constraint.constraint_func for p in ps.to_list() if p.is_constraint is not None]
             if np.any([cf in ['requiv_detached_max', 'requiv_single_max', 'requiv_contact_min'] for cf in constraint_funcs]):
                 plot_kwargs.setdefault('size', 1e3)
@@ -9313,12 +9308,12 @@ class Bundle(ParameterSet):
 
         # uniqueids needs to correspond to dc.dists_unpacked, not dc.dists
         if len(dc.dists_unpacked) == len(uniqueids):
-            values = [self.get_value(uniqueid=uid, unit=dist.unit, **_skip_filter_checks) for uid, dist in zip(uniqueids, dc.dists_unpacked)]
+            values = [self.get_value(uniqueid=uid, unit=dist.unit) for uid, dist in zip(uniqueids, dc.dists_unpacked)]
         elif len(dc.dists) == len(uniqueids):
-            values = [self.get_value(uniqueid=uid, unit=dist.unit, **_skip_filter_checks) for uid, dist in zip(uniqueids, dc.dists)]
+            values = [self.get_value(uniqueid=uid, unit=dist.unit) for uid, dist in zip(uniqueids, dc.dists)]
         else:
-            ps = self.exclude(context=['distribution', 'constraint'], **_skip_filter_checks)
-            values = [ps.get_value(twig=dist.label, unit=dist.unit, **_skip_filter_checks) for dist in dc.dists_unpacked]
+            ps = self.exclude(context=['distribution', 'constraint'])
+            values = [ps.get_value(twig=dist.label, unit=dist.unit) for dist in dc.dists_unpacked]
 
         try:
             return dc.logpdf(values, as_univariates=False)
@@ -9426,7 +9421,7 @@ class Bundle(ParameterSet):
         for k,v in kwargs.items():
             if k in qualifiers:
                 try:
-                    ret_ps.set_value_all(qualifier=k, value=v, **_skip_filter_checks)
+                    ret_ps.set_value_all(qualifier=k, value=v)
                 except:
                     self.remove_server(server=kwargs['server'])
                     raise
@@ -9481,11 +9476,11 @@ class Bundle(ParameterSet):
         return _return_ps(self, ret_ps)
 
     def _get_server_options_dict(self, server, exclude_qualifiers=[], **kwargs):
-        server_ps = self.filter(server=server, context='server', **_skip_filter_checks)
+        server_ps = self.filter(server=server, context='server')
         server_options = {p.qualifier: kwargs.get(p.qualifier, p.get_value()) for p in server_ps.to_list() if p.qualifier not in exclude_qualifiers}
 
         if 'walltime' in server_options.keys():
-            walltime_s = int(server_ps.get_value(qualifier='walltime', unit='s', walltime=kwargs.get('walltime', None), **_skip_filter_checks))
+            walltime_s = int(server_ps.get_value(qualifier='walltime', unit='s', walltime=kwargs.get('walltime', None)))
             m, s = divmod(walltime_s, 60)
             h, m = divmod(m, 60)
             d, h = divmod(h, 24)
@@ -9718,7 +9713,7 @@ class Bundle(ParameterSet):
         for k,v in kwargs.items():
             if k in qualifiers:
                 try:
-                    ret_ps.set_value_all(qualifier=k, value=v, **_skip_filter_checks)
+                    ret_ps.set_value_all(qualifier=k, value=v)
                 except:
                     self.remove_figure(figure=kwargs['figure'])
                     raise
@@ -9937,39 +9932,39 @@ class Bundle(ParameterSet):
         kwargs['check_default'] = False
         kwargs['check_visible'] = False
 
-        if fig_ps.kind in self.filter(context='dataset', **_skip_filter_checks).kinds:
+        if fig_ps.kind in self.filter(context='dataset').kinds:
             ds_kind = fig_ps.kind
             kwargs['kind'] = ds_kind
-            ds_same_kind = self.filter(context='dataset', kind=ds_kind, **_skip_filter_checks).datasets
-            ml_same_kind = self.filter(context='model', kind=ds_kind, **_skip_filter_checks).models
-            comp_same_kind = self.filter(context=['dataset', 'model'], kind=ds_kind, **_skip_filter_checks).components
+            ds_same_kind = self.filter(context='dataset', kind=ds_kind).datasets
+            ml_same_kind = self.filter(context='model', kind=ds_kind).models
+            comp_same_kind = self.filter(context=['dataset', 'model'], kind=ds_kind).components
 
             kwargs.setdefault('kind', ds_kind)
             if 'contexts' in fig_ps.qualifiers:
-                kwargs.setdefault('context', fig_ps.get_value(qualifier='contexts', expand=True, **_skip_filter_checks))
+                kwargs.setdefault('context', fig_ps.get_value(qualifier='contexts', expand=True))
             else:
                 kwargs['context'] = 'model'
 
 
             if 'datasets' in fig_ps.qualifiers:
-                kwargs.setdefault('dataset', fig_ps.get_value(qualifier='datasets', expand=True, **_skip_filter_checks))
+                kwargs.setdefault('dataset', fig_ps.get_value(qualifier='datasets', expand=True))
             if 'models' in fig_ps.qualifiers:
-                kwargs.setdefault('model', [None] + fig_ps.get_value(qualifier='models', expand=True, **_skip_filter_checks))
+                kwargs.setdefault('model', [None] + fig_ps.get_value(qualifier='models', expand=True))
             if 'components' in fig_ps.qualifiers:
-                kwargs.setdefault('component', fig_ps.get_value(qualifier='components', expand=True, **_skip_filter_checks))
+                kwargs.setdefault('component', fig_ps.get_value(qualifier='components', expand=True))
 
-            kwargs.setdefault('legend', fig_ps.get_value(qualifier='legend', **_skip_filter_checks))
+            kwargs.setdefault('legend', fig_ps.get_value(qualifier='legend'))
 
             for q in ['draw_sidebars', 'uncover', 'highlight', 'period', 't0']:
                 if q in fig_ps.qualifiers:
-                    kwargs.setdefault(q, fig_ps.get_value(qualifier=q, **_skip_filter_checks))
+                    kwargs.setdefault(q, fig_ps.get_value(qualifier=q))
 
             if 'time_source' in fig_ps.qualifiers:
-                time_source = fig_ps.get_value(qualifier='time_source', **_skip_filter_checks)
+                time_source = fig_ps.get_value(qualifier='time_source')
                 if time_source == 'default':
-                    time_source = self.get_value(qualifier='default_time_source', context='figure', **_skip_filter_checks)
+                    time_source = self.get_value(qualifier='default_time_source', context='figure')
                     if time_source == 'manual':
-                        kwargs.setdefault('time', self.get_value(qualifier='default_time', context='figure', **_skip_filter_checks))
+                        kwargs.setdefault('time', self.get_value(qualifier='default_time', context='figure'))
                     elif time_source == 'None':
                         # then we don't do anything
                         pass
@@ -9980,7 +9975,7 @@ class Bundle(ParameterSet):
                         kwargs.setdefault('time', time_source)
 
                 elif time_source == 'manual':
-                    kwargs.setdefault('time', fig_ps.get_value(qualifier='time', **_skip_filter_checks))
+                    kwargs.setdefault('time', fig_ps.get_value(qualifier='time'))
                 elif time_source == 'None':
                     # then we don't do anything
                     pass
@@ -9993,16 +9988,16 @@ class Bundle(ParameterSet):
             for d in ['x', 'y', 'fc', 'ec'] if ds_kind == 'mesh' else ['x', 'y']:
                 if d not in ['fc', 'ec']:
                     # fc and ec are handled later because they have different options
-                    kwargs.setdefault(d, fig_ps.get_value(qualifier=d, **_skip_filter_checks))
+                    kwargs.setdefault(d, fig_ps.get_value(qualifier=d))
 
-                if kwargs.get('{}label_source'.format(d), fig_ps.get_value(qualifier='{}label_source'.format(d), **_skip_filter_checks))=='manual':
-                    kwargs.setdefault('{}label'.format(d), fig_ps.get_value(qualifier='{}label'.format(d), **_skip_filter_checks))
+                if kwargs.get('{}label_source'.format(d), fig_ps.get_value(qualifier='{}label_source'.format(d)))=='manual':
+                    kwargs.setdefault('{}label'.format(d), fig_ps.get_value(qualifier='{}label'.format(d)))
 
-                if kwargs.get('{}unit_source'.format(d), fig_ps.get_value(qualifier='{}unit_source'.format(d), **_skip_filter_checks))=='manual':
-                    kwargs.setdefault('{}unit'.format(d), fig_ps.get_value(qualifier='{}unit'.format(d), **_skip_filter_checks))
+                if kwargs.get('{}unit_source'.format(d), fig_ps.get_value(qualifier='{}unit_source'.format(d)))=='manual':
+                    kwargs.setdefault('{}unit'.format(d), fig_ps.get_value(qualifier='{}unit'.format(d)))
 
-                if kwargs.get('{}lim_source'.format(d), fig_ps.get_value(qualifier='{}lim_source'.format(d), **_skip_filter_checks))=='manual':
-                    lim = fig_ps.get_value(qualifier='{}lim'.format(d), **_skip_filter_checks)
+                if kwargs.get('{}lim_source'.format(d), fig_ps.get_value(qualifier='{}lim_source'.format(d)))=='manual':
+                    lim = fig_ps.get_value(qualifier='{}lim'.format(d))
                     if len(lim)==2:
                         kwargs.setdefault('{}lim'.format(d), lim)
                     else:
@@ -10010,7 +10005,7 @@ class Bundle(ParameterSet):
 
 
             # if ds_kind in ['mesh', 'lp']:
-                # kwargs.setdefault('time', fig_ps.get_value(qualifier='times', expand=True, **_skip_filter_checks))
+                # kwargs.setdefault('time', fig_ps.get_value(qualifier='times', expand=True))
 
                 # if 'times' in kwargs.keys():
                     # logger.warning("")
@@ -10019,22 +10014,22 @@ class Bundle(ParameterSet):
 
             if ds_kind in ['mesh']:
                 for q in ['fc', 'ec']:
-                    source = fig_ps.get_value(qualifier=q+'_source', **_skip_filter_checks)
+                    source = fig_ps.get_value(qualifier=q+'_source')
                     if source == 'column':
-                        kwargs[q] = fig_ps.get_value(qualifier=q+'_column', **_skip_filter_checks)
+                        kwargs[q] = fig_ps.get_value(qualifier=q+'_column')
 
-                        cmap_source = fig_ps.get_value(qualifier=q+'map_source', **_skip_filter_checks)
+                        cmap_source = fig_ps.get_value(qualifier=q+'map_source')
                         if cmap_source == 'manual':
-                            kwargs[q+'map'] = fig_ps.get_value(qualifier=q+'map', **_skip_filter_checks)
+                            kwargs[q+'map'] = fig_ps.get_value(qualifier=q+'map')
 
                     elif source == 'manual':
-                        kwargs[q] = fig_ps.get_value(qualifier=q, **_skip_filter_checks)
+                        kwargs[q] = fig_ps.get_value(qualifier=q)
                     elif source == 'face':
                         kwargs[q] = 'face'
                     elif source == 'component':
-                        kwargs[q] = {c: self.get_value(qualifier='color', component=c, context='figure', **_skip_filter_checks) for c in comp_same_kind if c in self.hierarchy.get_meshables()}
+                        kwargs[q] = {c: self.get_value(qualifier='color', component=c, context='figure') for c in comp_same_kind if c in self.hierarchy.get_meshables()}
                     elif source == 'model':
-                        kwargs[q] = {ml: self.get_value(qualifier='color', model=ml, context='figure', **_skip_filter_checks) for ml in ml_same_kind}
+                        kwargs[q] = {ml: self.get_value(qualifier='color', model=ml, context='figure') for ml in ml_same_kind}
 
                     if kwargs[q] == 'None':
                         kwargs[q] = None
@@ -10050,23 +10045,23 @@ class Bundle(ParameterSet):
                         else:
                             suff = ''
 
-                        source = kwargs.get('{}_source'.format(q), fig_ps.get_value(qualifier='{}_source'.format(q), **_skip_filter_checks))
+                        source = kwargs.get('{}_source'.format(q), fig_ps.get_value(qualifier='{}_source'.format(q)))
                         if source == 'manual':
                             if q == 'marker':
-                                kwargs[q] = {'dataset': fig_ps.get_value(qualifier=q, **_skip_filter_checks)}
+                                kwargs[q] = {'dataset': fig_ps.get_value(qualifier=q)}
                             elif q == 'linestyle':
-                                kwargs[q] = {'model': fig_ps.get_value(qualifier=q, **_skip_filter_checks)}
+                                kwargs[q] = {'model': fig_ps.get_value(qualifier=q)}
                             else:
-                                kwargs[qmap.get(q,q)] = fig_ps.get_value(qualifier=q, **_skip_filter_checks)
+                                kwargs[qmap.get(q,q)] = fig_ps.get_value(qualifier=q)
                         elif source == 'dataset':
-                            kwargs[qmap.get(q,q)] = {ds+suff: self.get_value(qualifier=q, dataset=ds, context='figure', **_skip_filter_checks) for ds in ds_same_kind}
+                            kwargs[qmap.get(q,q)] = {ds+suff: self.get_value(qualifier=q, dataset=ds, context='figure') for ds in ds_same_kind}
                         elif source == 'model':
-                            kwargs[qmap.get(q,q)] = {ml+suff: self.get_value(qualifier=q, model=ml, context='figure', **_skip_filter_checks) for ml in ml_same_kind}
+                            kwargs[qmap.get(q,q)] = {ml+suff: self.get_value(qualifier=q, model=ml, context='figure') for ml in ml_same_kind}
                         elif source == 'component':
                             kwargs[qmap.get(q,q)] = {}
                             for c in comp_same_kind:
                                 try:
-                                    kwargs[qmap.get(q,q)][c+suff] = self.get_value(qualifier=q, component=c, context='figure', **_skip_filter_checks)
+                                    kwargs[qmap.get(q,q)][c+suff] = self.get_value(qualifier=q, component=c, context='figure')
                                 except ValueError:
                                     # RVs will include orbits in comp_same kind, but we can safely skip those
                                     pass
@@ -10075,37 +10070,37 @@ class Bundle(ParameterSet):
 
 
         elif fig_ps.kind in ['distribution_collection']:
-            distribution_set = fig_ps.get_value(qualifier='distribution_set', distribution_sets=kwargs.get('distribution_sets', None), **_skip_filter_checks)
+            distribution_set = fig_ps.get_value(qualifier='distribution_set', distribution_sets=kwargs.get('distribution_sets', None))
             if distribution_set == 'manual':
                 kwargs['context'] = 'distribution'
 
-                kwargs.setdefault('distribution', fig_ps.get_value(qualifier='distributions', distributions=kwargs.get('distributions', None), **_skip_filter_checks))
+                kwargs.setdefault('distribution', fig_ps.get_value(qualifier='distributions', distributions=kwargs.get('distributions', None)))
                 if not len(kwargs.get('distribution')):
                     logger.warning("distributions not set, cannot plot")
                     return None, None
 
-                kwargs['to_uniforms'] = fig_ps.get_value(qualifier='to_uniforms_sigma', to_uniforms_sigma=kwargs.get('to_uniforms_sigma', None), **_skip_filter_checks) if fig_ps.get_value(qualifier='to_uniforms', to_uniforms=kwargs.get('to_uniforms', None), **_skip_filter_checks) else False
-                kwargs['to_univariates'] = True if kwargs['to_uniforms'] else fig_ps.get_value(qualifier='to_univariates', to_univariates=kwargs.get('to_univariates', None), **_skip_filter_checks)
+                kwargs['to_uniforms'] = fig_ps.get_value(qualifier='to_uniforms_sigma', to_uniforms_sigma=kwargs.get('to_uniforms_sigma', None)) if fig_ps.get_value(qualifier='to_uniforms', to_uniforms=kwargs.get('to_uniforms', None)) else False
+                kwargs['to_univariates'] = True if kwargs['to_uniforms'] else fig_ps.get_value(qualifier='to_univariates', to_univariates=kwargs.get('to_univariates', None))
 
                 for k in fig_ps.qualifiers:
                     if k in ['distributions', 'to_uniforms', 'to_univariates']:
                         continue
-                    kwargs.setdefault(k, fig_ps.get_value(qualifier=k, **_skip_filter_checks))
+                    kwargs.setdefault(k, fig_ps.get_value(qualifier=k))
             else:
                 # distribution_sets should be something like priors@emcee@solver, sample_from@phoebe01@compute, etc
                 kwargs['twig'] = distribution_set
 
         elif 'solver' in fig_ps.qualifiers:
             kwargs['context'] = 'solver'
-            solver = fig_ps.get_value(qualifier='solver', solver=kwargs.get('solver', None), **_skip_filter_checks)
+            solver = fig_ps.get_value(qualifier='solver', solver=kwargs.get('solver', None))
             kwargs['solver'] = solver
-            distribution = fig_ps.get_value(qualifier='distribution', distribution=kwargs.get('distribution', None), **_skip_filter_checks)
+            distribution = fig_ps.get_value(qualifier='distribution', distribution=kwargs.get('distribution', None))
             kwargs['distribution_twig'] = '{}@{}'.format(distribution, solver)
 
         elif 'solution' in fig_ps.qualifiers:
             kwargs['context'] = 'solution'
 
-            kwargs.setdefault('solution', fig_ps.get_value(qualifier='solution', **_skip_filter_checks))
+            kwargs.setdefault('solution', fig_ps.get_value(qualifier='solution'))
             if not len(kwargs.get('solution')):
                 logger.warning("solution not set, cannot plot")
                 return None, None
@@ -10113,7 +10108,7 @@ class Bundle(ParameterSet):
             for k in fig_ps.qualifiers:
                 if k in ['solution']:
                     continue
-                kwargs.setdefault(k, fig_ps.get_value(qualifier=k, **_skip_filter_checks))
+                kwargs.setdefault(k, fig_ps.get_value(qualifier=k))
 
         else:
             raise ValueError("nothing found to plot")
@@ -10230,8 +10225,8 @@ class Bundle(ParameterSet):
             datasets = [datasets]
 
         # we'll add 'bol' to the list of default datasets... but only if bolometric is needed for irradiation
-        compute_ps = self.get_compute(compute, **_skip_filter_checks)
-        needs_bol = compute_ps.get_value(qualifier='irrad_method', irrad_method=kwargs.get('irrad_method', None), default='none', **_skip_filter_checks) != 'none'
+        compute_ps = self.get_compute(compute)
+        needs_bol = compute_ps.get_value(qualifier='irrad_method', irrad_method=kwargs.get('irrad_method', None), default='none') != 'none'
         if needs_bol:
             datasets += ['bol']
 
@@ -10265,18 +10260,18 @@ class Bundle(ParameterSet):
             if ld_mode == 'interp':
                 logger.debug("skipping computing ld_coeffs{} for {}@{} because ld_mode{}='interp'".format(bol_suffix, ldcs_param.dataset, ldcs_param.component, bol_suffix))
             elif ld_mode == 'manual':
-                ld_coeffs_manual = self.get_value(qualifier='ld_coeffs{}'.format(bol_suffix), dataset=ldcs_param.dataset, component=ldcs_param.component, context='component' if is_bol else 'dataset', **_skip_filter_checks)
+                ld_coeffs_manual = self.get_value(qualifier='ld_coeffs{}'.format(bol_suffix), dataset=ldcs_param.dataset, component=ldcs_param.component, context='component' if is_bol else 'dataset')
                 ld_coeffs_ret["{}@{}@{}".format('ld_coeffs{}'.format(bol_suffix), ldcs_param.component, 'component' if is_bol else ldcs_param.dataset)] = ld_coeffs_manual
                 continue
             elif ld_mode == 'lookup':
                 ldcs = ldcs_param.get_value(**_skip_filter_checks)
-                ld_func = self.get_value(qualifier='ld_func{}'.format(bol_suffix), dataset=ldcs_param.dataset, component=ldcs_param.component, context='component' if is_bol else 'dataset', **_skip_filter_checks)
+                ld_func = self.get_value(qualifier='ld_func{}'.format(bol_suffix), dataset=ldcs_param.dataset, component=ldcs_param.component, context='component' if is_bol else 'dataset')
                 if is_bol:
                     passband = 'Bolometric:900-40000'
                 else:
-                    passband = self.get_value(qualifier='passband', dataset=ldcs_param.dataset, context='dataset', **_skip_filter_checks)
+                    passband = self.get_value(qualifier='passband', dataset=ldcs_param.dataset, context='dataset')
 
-                atm = self.get_value(qualifier='atm', compute=compute, component=ldcs_param.component, default='ck2004', atm=kwargs.get('atm', None), **_skip_filter_checks)
+                atm = self.get_value(qualifier='atm', compute=compute, component=ldcs_param.component, default='ck2004', atm=kwargs.get('atm', None))
 
                 if ldcs == 'auto':
                     if atm in ['extern_atmx', 'extern_planckint', 'blackbody']:
@@ -10285,9 +10280,9 @@ class Bundle(ParameterSet):
                         ldcs = atm
 
                 pb = get_passband(passband, content='{}:ld'.format(ldcs))
-                teff = self.get_value(qualifier='teff', component=ldcs_param.component, context='component', unit='K', **_skip_filter_checks)
-                logg = self.get_value(qualifier='logg', component=ldcs_param.component, context='component', **_skip_filter_checks)
-                abun = self.get_value(qualifier='abun', component=ldcs_param.component, context='component', **_skip_filter_checks)
+                teff = self.get_value(qualifier='teff', component=ldcs_param.component, context='component', unit='K')
+                logg = self.get_value(qualifier='logg', component=ldcs_param.component, context='component')
+                abun = self.get_value(qualifier='abun', component=ldcs_param.component, context='component')
                 if is_bol:
                     photon_weighted = False
                 else:
@@ -10332,7 +10327,7 @@ class Bundle(ParameterSet):
             # as phoebe may not support all the same distortion_methods for these backends
             kwargs.setdefault('distortion_method', 'roche')
 
-            atm_backend = {component: self.get_value(qualifier='atm', component=component, compute=compute, atm=kwargs.get('atm', kwargs.get('atms', {}).get(component, None)), default='ck2004', **_skip_filter_checks) for component in self.hierarchy.get_stars()}
+            atm_backend = {component: self.get_value(qualifier='atm', component=component, compute=compute, atm=kwargs.get('atm', kwargs.get('atms', {}).get(component, None)), default='ck2004') for component in self.hierarchy.get_stars()}
             kwargs.setdefault('atm', atm_backend)
 
         # temporarily disable interactive_checks, check_default, and check_visible
@@ -10362,9 +10357,9 @@ class Bundle(ParameterSet):
         return system
 
     def _datasets_where(self, compute, mesh_needed=False, l3_needed=False):
-        datasets = self.filter(compute=compute, context='compute', qualifier='enabled', value=True, **_skip_filter_checks).datasets
-        ds_kinds = [self.filter(dataset=ds, context='dataset', **_skip_filter_checks).kind for ds in datasets]
-        backend = self.filter(compute=compute, context='compute', **_skip_filter_checks).kind
+        datasets = self.filter(compute=compute, context='compute', qualifier='enabled', value=True).datasets
+        ds_kinds = [self.filter(dataset=ds, context='dataset').kind for ds in datasets]
+        backend = self.filter(compute=compute, context='compute').kind
 
         subset = []
 
@@ -10376,7 +10371,7 @@ class Bundle(ParameterSet):
                 if kind == 'lc'
                 or kind == 'lp'
                 or (kind == 'rv' and backend != 'phoebe')
-                or (kind == 'rv' and len(self.filter(qualifier='rv_method', dataset=ds, compute=compute, value='flux-weighted', **_skip_filter_checks)) > 0)
+                or (kind == 'rv' and len(self.filter(qualifier='rv_method', dataset=ds, compute=compute, value='flux-weighted')) > 0)
             ]
 
         # subset can have repeated entries; return unique occurrences:     
@@ -10457,15 +10452,15 @@ class Bundle(ParameterSet):
 
             # don't allow things like model='mymodel', etc
             forbidden_keys = parameters._meta_fields_filter
-            compute_ps = self.get_compute(compute, **_skip_filter_checks)
+            compute_ps = self.get_compute(compute)
             self._kwargs_checks(kwargs, additional_allowed_keys=['system', 'skip_checks', 'ret_structured_dicts', 'pblum_method']+compute_ps.qualifiers, additional_forbidden_keys=forbidden_keys)
 
         ret_structured_dicts = kwargs.get('ret_structured_dicts', False)
         l3s = {}
         for dataset in datasets:
-            l3_mode = self.get_value(qualifier='l3_mode', context='dataset', dataset=dataset, **_skip_filter_checks)
+            l3_mode = self.get_value(qualifier='l3_mode', context='dataset', dataset=dataset)
             if l3_mode == 'flux':
-                l3_flux = self.get_value(qualifier='l3', context='dataset', dataset=dataset, unit=u.W/u.m**2, **_skip_filter_checks)
+                l3_flux = self.get_value(qualifier='l3', context='dataset', dataset=dataset, unit=u.W/u.m**2)
                 # pbflux could be 0.0 for the distortion_method='none' case
                 l3_frac = l3_flux / (l3_flux + use_pbfluxes.get(dataset)) if use_pbfluxes.get(dataset) != 0.0 else 0.0
                 if ret_structured_dicts:
@@ -10476,7 +10471,7 @@ class Bundle(ParameterSet):
                     self.set_value(qualifier='l3_frac', context='dataset', dataset=dataset, check_visible=False, value=l3_frac)
 
             elif l3_mode == 'fraction':
-                l3_frac = self.get_value(qualifier='l3_frac', context='dataset', dataset=dataset, **_skip_filter_checks)
+                l3_frac = self.get_value(qualifier='l3_frac', context='dataset', dataset=dataset)
                 l3_flux = (l3_frac)/(1-l3_frac) * use_pbfluxes.get(dataset)
 
                 if ret_structured_dicts:
@@ -10627,7 +10622,7 @@ class Bundle(ParameterSet):
         if not isinstance(compute, str):
             raise TypeError("compute must be a single value (string)")
 
-        compute_ps = self.get_compute(compute=compute, **_skip_filter_checks)
+        compute_ps = self.get_compute(compute=compute)
         ret_structured_dicts = kwargs.get('ret_structured_dicts', False)
 
         # either take user-passed datasets or datasets that require a mesh:
@@ -10656,8 +10651,8 @@ class Bundle(ParameterSet):
             components = valid_components
 
         # NOTE: this is flipped so that stefan-boltzmann can manually be used even if the compute-options have kind='phoebe' and don't have that choice
-        pblum_method = kwargs.pop('pblum_method', compute_ps.get_value(qualifier='pblum_method', default='phoebe', **_skip_filter_checks))
-        t0 = self.get_value(qualifier='t0', context='system', unit=u.d, t0=kwargs.pop('t0', None), **_skip_filter_checks)
+        pblum_method = kwargs.pop('pblum_method', compute_ps.get_value(qualifier='pblum_method', default='phoebe'))
+        t0 = self.get_value(qualifier='t0', context='system', unit=u.d, t0=kwargs.pop('t0', None))
 
         # don't allow things like model='mymodel', etc
         forbidden_keys = parameters._meta_fields_filter
@@ -10680,7 +10675,7 @@ class Bundle(ParameterSet):
         # sure all passed datasets are passband-dependent
         pblum_datasets = datasets
         for dataset in datasets:
-            if not len(self.filter(qualifier='passband', dataset=dataset, **_skip_filter_checks)):
+            if not len(self.filter(qualifier='passband', dataset=dataset)):
                 if dataset not in self.datasets:
                     raise ValueError("dataset '{}' is not a valid dataset attached to the bundle".format(dataset))
                 raise ValueError("dataset '{}' is not passband-dependent".format(dataset))
@@ -10694,7 +10689,7 @@ class Bundle(ParameterSet):
         atms = {}
         # note here that we aren't including the envelopes as they don't have atm parameters
         for component in self.hierarchy.get_stars():
-            atm = compute_ps.get_value(qualifier='atm', component=component, atm=kwargs.get('atm', None), **_skip_filter_checks)
+            atm = compute_ps.get_value(qualifier='atm', component=component, atm=kwargs.get('atm', None))
             if atm == 'extern_planckint':
                 atm = 'blackbody'
             elif atm == 'extern_atmx':
@@ -10713,10 +10708,10 @@ class Bundle(ParameterSet):
             logger.debug("computing observables with ignore_effects=True for {}".format(pblum_datasets))
             system.populate_observables(t0, ['lc'], pblum_datasets, ignore_effects=True)
         elif pblum_method == 'stefan-boltzmann':
-            requivs = {component: self.get_value(qualifier='requiv', component=component, context='component', unit='m', **_skip_filter_checks) for component in valid_components}
-            teffs = {component: self.get_value(qualifier='teff', component=component, context='component', unit='K', **_skip_filter_checks) for component in valid_components}
-            loggs = {component: self.get_value(qualifier='logg', component=component, context='component', **_skip_filter_checks) for component in valid_components}
-            abuns = {component: self.get_value(qualifier='abun', component=component, context='component', **_skip_filter_checks) for component in valid_components}
+            requivs = {component: self.get_value(qualifier='requiv', component=component, context='component', unit='m') for component in valid_components}
+            teffs = {component: self.get_value(qualifier='teff', component=component, context='component', unit='K') for component in valid_components}
+            loggs = {component: self.get_value(qualifier='logg', component=component, context='component') for component in valid_components}
+            abuns = {component: self.get_value(qualifier='abun', component=component, context='component') for component in valid_components}
 
             system = None
 
@@ -10754,18 +10749,18 @@ class Bundle(ParameterSet):
 
             elif pblum_method == 'stefan-boltzmann':
                 for component in valid_components:
-                    passband = self.get_value(qualifier='passband', dataset=dataset, context='dataset', **_skip_filter_checks)
-                    ld_mode = self.get_value(qualifier='ld_mode', component=component, dataset=dataset, context='dataset', **_skip_filter_checks)
-                    intens_weighting = self.get_value(qualifier='intens_weighting', dataset=dataset, context='dataset', **_skip_filter_checks)
+                    passband = self.get_value(qualifier='passband', dataset=dataset, context='dataset')
+                    ld_mode = self.get_value(qualifier='ld_mode', component=component, dataset=dataset, context='dataset')
+                    intens_weighting = self.get_value(qualifier='intens_weighting', dataset=dataset, context='dataset')
                     if ld_mode == 'manual':
-                        ld_func = self.get_value(qualifier='ld_func', component=component, dataset=dataset, context='dataset', **_skip_filter_checks)
-                        ld_coeffs = self.get_value(qualifier='ld_coeffs', component=component, dataset=dataset, context='dataset', **_skip_filter_checks)
+                        ld_func = self.get_value(qualifier='ld_func', component=component, dataset=dataset, context='dataset')
+                        ld_coeffs = self.get_value(qualifier='ld_coeffs', component=component, dataset=dataset, context='dataset')
                     elif ld_mode == 'lookup':
-                        ld_func = self.get_value(qualifier='ld_func', component=component, dataset=dataset, context='dataset', **_skip_filter_checks)
+                        ld_func = self.get_value(qualifier='ld_func', component=component, dataset=dataset, context='dataset')
                         # TODO: can we optimize this or have some kwarg if this has already been done?
                         if not kwargs.get('skip_compute_ld_coeffs', False):
                             self.compute_ld_coeffs(compute=compute, dataset=dataset, set_value=True, skip_checks=True, **{k:v for k,v in kwargs.items() if k not in ['ret_structured_dicts', 'pblum_mode', 'pblum_method', 'skip_checks']})
-                        ld_coeffs = self.get_value(qualifier='ld_coeffs', component=component, dataset=dataset, context='dataset', **_skip_filter_checks)
+                        ld_coeffs = self.get_value(qualifier='ld_coeffs', component=component, dataset=dataset, context='dataset')
                     else:
                         ld_func = 'interp'
                         ld_coeffs = None
@@ -10824,8 +10819,8 @@ class Bundle(ParameterSet):
         # and therefore relative pblums
         pblum_scale_copy_ds = {}
         for dataset in datasets:
-            ds = self.get_dataset(dataset=dataset, **_skip_filter_checks)
-            pblum_mode = ds.get_value(qualifier='pblum_mode', pblum_mode=kwargs.get('pblum_mode', None), default='absolute', **_skip_filter_checks)
+            ds = self.get_dataset(dataset=dataset)
+            pblum_mode = ds.get_value(qualifier='pblum_mode', pblum_mode=kwargs.get('pblum_mode', None), default='absolute')
 
             if pblum_mode == 'decoupled':
                 for component in valid_components:
@@ -10837,21 +10832,21 @@ class Bundle(ParameterSet):
                     # that was passed (which was likely either computed through
                     # a mesh or estimated using Stefan-Boltzmann/spherical
                     # approximation)
-                    pblum = ds.get_value(qualifier='pblum', unit=u.W, component=component, **_skip_filter_checks)
+                    pblum = ds.get_value(qualifier='pblum', unit=u.W, component=component)
                     pblums_scale[dataset][component] = pblum / pblums_abs[dataset][component] if pblums_abs[dataset][component] != 0.0 else 0.0
 
             elif pblum_mode == 'component-coupled':
                 # now for each component we need to store the scaling factor between
                 # absolute and relative intensities
                 pblum_scale_copy_comp = {}
-                pblum_component = ds.get_value(qualifier='pblum_component', **_skip_filter_checks)
+                pblum_component = ds.get_value(qualifier='pblum_component')
                 for component in valid_components:
                     if component=='_default':
                         continue
                     if pblum_component==component:
                         # then we do the same as in the decoupled case
                         # for this component
-                        pblum = ds.get_value(qualifier='pblum', unit=u.W, component=component, **_skip_filter_checks)
+                        pblum = ds.get_value(qualifier='pblum', unit=u.W, component=component)
                         pblums_scale[dataset][component] = pblum / pblums_abs[dataset][component] if pblums_abs[dataset][component] != 0.0 else 0.0
                     else:
                         # then this component wants to copy the scale from another component
@@ -10865,7 +10860,7 @@ class Bundle(ParameterSet):
                     pblums_scale[dataset][comp] = pblums_scale[dataset][comp_copy]
 
             elif pblum_mode == 'dataset-coupled':
-                pblum_ref = ds.get_value(qualifier='pblum_dataset', **_skip_filter_checks)
+                pblum_ref = ds.get_value(qualifier='pblum_dataset')
                 # similarly to the component-coupled case, we'll store
                 # the referenced dataset and apply the scalings to the
                 # dictionary once outside of the dataset loop.
@@ -10890,14 +10885,14 @@ class Bundle(ParameterSet):
         # finally, we'll loop through the datasets again to apply the scales to
         # determine the relative pblums, compute pbfluxes, and expose/set whatever
         # was requested
-        distance = self.get_value(qualifier='distance', context='system', unit=u.m, **_skip_filter_checks)
+        distance = self.get_value(qualifier='distance', context='system', unit=u.m)
         for dataset in datasets:
-            pblum_mode = self.get_value(qualifier='pblum_mode', dataset=dataset, pblum_mode=kwargs.get('pblum_mode', None), default='absolute', **_skip_filter_checks)
+            pblum_mode = self.get_value(qualifier='pblum_mode', dataset=dataset, pblum_mode=kwargs.get('pblum_mode', None), default='absolute')
             if pblum_mode == 'dataset-scaled':
                 ds_scaled = True
             elif pblum_mode == 'dataset-coupled':
-                coupled_to = self.get_value(qualifier='pblum_dataset', dataset=dataset, **_skip_filter_checks)
-                if self.get_value(qualifier='pblum_mode', dataset=coupled_to, **_skip_filter_checks) == 'dataset-scaled':
+                coupled_to = self.get_value(qualifier='pblum_dataset', dataset=dataset)
+                if self.get_value(qualifier='pblum_mode', dataset=coupled_to) == 'dataset-scaled':
                     ds_scaled = True
                 else:
                     ds_scaled = False
@@ -10907,7 +10902,7 @@ class Bundle(ParameterSet):
             pbflux_this_dataset = 0.0
             for component in valid_components:
                 if ds_scaled and model is not None:
-                    flux_scale = self.get_value(qualifier='flux_scale', dataset=dataset, model=model, context='model', **_skip_filter_checks)
+                    flux_scale = self.get_value(qualifier='flux_scale', dataset=dataset, model=model, context='model')
                     pblum_rel = pblums_abs[dataset][component] * flux_scale
                 else:
                     pblum_rel = pblums_abs[dataset][component] * pblums_scale[dataset].get(component, 1.0)
@@ -10915,11 +10910,11 @@ class Bundle(ParameterSet):
                 pblums_rel[dataset][component] = pblum_rel
 
                 try:
-                    pblum_param = self.get_parameter(qualifier='pblum', component=component, dataset=dataset, context='dataset', **_skip_filter_checks)
+                    pblum_param = self.get_parameter(qualifier='pblum', component=component, dataset=dataset, context='dataset')
                 except ValueError:
                     pblum_param = None
                 if set_value and pblum_param is not None:
-                    pblum_param.set_value(value=pblum_rel*u.W, **_skip_filter_checks)
+                    pblum_param.set_value(value=pblum_rel*u.W)
 
                 if not ret_structured_dicts and component in components:
                     if pblum and (not ds_scaled or model is not None):
@@ -10936,7 +10931,7 @@ class Bundle(ParameterSet):
             pbflux_this_dataset /= distance**2
 
             if set_value:
-                self.set_value(qualifier='pbflux', dataset=dataset, context='dataset', value=pbflux_this_dataset*u.W/u.m**2, **_skip_filter_checks)
+                self.set_value(qualifier='pbflux', dataset=dataset, context='dataset', value=pbflux_this_dataset*u.W/u.m**2)
 
             if pbflux and not ret_structured_dicts and (not ds_scaled or model is not None):
                 ret["{}@{}".format('pbflux', dataset)] = pbflux_this_dataset*u.W/u.m**2
@@ -11024,7 +11019,7 @@ class Bundle(ParameterSet):
             overwrite_ps = self.remove_compute(compute=kwargs['compute'], during_overwrite=True)
             # check the label again, just in case kwargs['compute'] belongs to
             # something other than compute
-            self.exclude(context=['model', 'solution'], **_skip_filter_checks)._check_label(kwargs['compute'], allow_overwrite=False)
+            self.exclude(context=['model', 'solution'])._check_label(kwargs['compute'], allow_overwrite=False)
 
         logger.info("adding {} '{}' compute to bundle".format(metawargs['kind'], metawargs['compute']))
         self._attach_params(params, **metawargs)
@@ -11072,7 +11067,7 @@ class Bundle(ParameterSet):
         ret_changes += self._handle_distribution_selectparams(return_changes=return_changes)
         ret_changes += self._handle_computesamplefrom_selectparams(return_changes=return_changes)
         if sample_from is not None:
-            ret_ps.set_value_all(qualifier='sample_from', value=sample_from, **_skip_filter_checks)
+            ret_ps.set_value_all(qualifier='sample_from', value=sample_from)
 
         ret_changes += self._handle_compute_selectparams(return_changes=return_changes)
         ret_changes += self._handle_compute_choiceparams(return_changes=return_changes)
@@ -11257,11 +11252,11 @@ class Bundle(ParameterSet):
         changed_params = self.run_delayed_constraints()
 
         if 'solution' in kwargs.keys():
-            if kwargs.get('sample_from', None) is not None or np.any([len(p.get_value()) for p in self.filter(qualifier='sample_from', compute=computes, **_skip_filter_checks).to_list()]) :
+            if kwargs.get('sample_from', None) is not None or np.any([len(p.get_value()) for p in self.filter(qualifier='sample_from', compute=computes).to_list()]) :
                 raise ValueError("cannot apply both solution and sample_from")
             else:
                 logger.warning("applying passed solution ({}) to sample_from".format(kwargs.get('solution')))
-                if 'sample_num' not in kwargs.keys() and not self.get_value(qualifier='adopt_distributions', solution=kwargs.get('solution'), default=False, **_skip_filter_checks):
+                if 'sample_num' not in kwargs.keys() and not self.get_value(qualifier='adopt_distributions', solution=kwargs.get('solution'), default=False):
                     logger.warning("defaulting sample_num=1 since adopt_distributions@{}=False".format(kwargs.get('solution')))
                     kwargs['sample_num'] = 1
 
@@ -11271,7 +11266,7 @@ class Bundle(ParameterSet):
         # removed so that they aren't passed on to all future get_value(...
         # **kwargs) calls
         for compute_ in computes:
-            computes_ps = self.get_compute(compute=compute_, kind=kwargs.get('kind'), **_skip_filter_checks)
+            computes_ps = self.get_compute(compute=compute_, kind=kwargs.get('kind'))
             for k in parameters._meta_fields_filter:
                 if k in kwargs.keys():
                     dump = kwargs.pop(k)
@@ -11308,9 +11303,9 @@ class Bundle(ParameterSet):
                             raise ValueError("dataset {}@{} is enabled in multiple compute options".format(item[0], item[1]))
                         datasets.append(item)
             elif isinstance(dataset, list) or isinstance(dataset, tuple) or isinstance(dataset, str):
-                datasets += self.filter(dataset=dataset, context='dataset', **_skip_filter_checks).datasets
+                datasets += self.filter(dataset=dataset, context='dataset').datasets
             elif isinstance(dataset, dict):
-                datasets += self.filter(dataset=dataset.get(compute_, []), context='dataset', **_skip_filter_checks).datasets
+                datasets += self.filter(dataset=dataset.get(compute_, []), context='dataset').datasets
 
 
         if not len(datasets):
@@ -11320,24 +11315,24 @@ class Bundle(ParameterSet):
 
     def _write_crimpl_script(self, script_fname, script, use_server, deps_pip, autocontinue, kwargs):
         f = open(script_fname, 'w')
-        server_ps = self.get_server(server=use_server, **_skip_filter_checks)
+        server_ps = self.get_server(server=use_server)
 
-        crimpl_name = server_ps.get_value(qualifier='crimpl_name', crimpl_name=kwargs.get('crimpl_name', None), **_skip_filter_checks)
+        crimpl_name = server_ps.get_value(qualifier='crimpl_name', crimpl_name=kwargs.get('crimpl_name', None))
         f.write("crimpl_name = '{}'\n".format(crimpl_name))
 
-        nprocs = server_ps.get_value(qualifier='nprocs', nprocs=kwargs.get('nprocs', None), **_skip_filter_checks)
+        nprocs = server_ps.get_value(qualifier='nprocs', nprocs=kwargs.get('nprocs', None))
         f.write("nprocs = {}\n".format(nprocs))
 
-        use_mpi = server_ps.get_value(qualifier='use_mpi', use_mpi=kwargs.get('use_mpi', None), **_skip_filter_checks)
+        use_mpi = server_ps.get_value(qualifier='use_mpi', use_mpi=kwargs.get('use_mpi', None))
         f.write("use_mpi = {}\n".format(use_mpi))
 
-        use_conda = server_ps.get_value(qualifier='use_conda', use_conda=kwargs.get('use_conda', None), default=True, **_skip_filter_checks)
+        use_conda = server_ps.get_value(qualifier='use_conda', use_conda=kwargs.get('use_conda', None), default=True)
         f.write("use_conda = {}\n".format(use_conda))
 
-        conda_env = server_ps.get_value(qualifier='conda_env', conda_env=kwargs.get('conda_env', None), **_skip_filter_checks)
+        conda_env = server_ps.get_value(qualifier='conda_env', conda_env=kwargs.get('conda_env', None))
         f.write("conda_env = '{}'\n".format(conda_env))
 
-        install_deps = server_ps.get_value(qualifier='install_deps', install_deps=kwargs.get('install_deps', None), **_skip_filter_checks)
+        install_deps = server_ps.get_value(qualifier='install_deps', install_deps=kwargs.get('install_deps', None))
         f.write("install_deps = {}\n".format(install_deps))
 
         job_name = _crimpl.common._new_job_name()
@@ -11432,10 +11427,10 @@ class Bundle(ParameterSet):
         sample_from = self.get_value(qualifier='sample_from', compute=compute, sample_from=kwargs.get('sample_from', None), default=[], expand=True)
         exclude_distributions = [dist for dist in self.distributions if dist not in sample_from]
         exclude_solutions = [sol for sol in self.solutions if sol not in sample_from]
-        exclude_features = [feature for feature in self.features if not self.get_value(qualifier='enabled', feature=feature, compute=compute, **_skip_filter_checks)]
+        exclude_features = [feature for feature in self.features if not self.get_value(qualifier='enabled', feature=feature, compute=compute)]
         # we need to include uniqueids if needing to apply the solution during sample_from
         incl_uniqueid = len(exclude_solutions) != len(self.solutions)
-        script.append("bdict = json.loads('{}', object_pairs_hook=phoebe.utils.parse_json);".format(json.dumps(self.exclude(context=exclude_contexts, **_skip_filter_checks).exclude(qualifier=exclude_qualifiers, **_skip_filter_checks).exclude(distribution=exclude_distributions, **_skip_filter_checks).exclude(solution=exclude_solutions, **_skip_filter_checks).exclude(feature=exclude_features, **_skip_filter_checks).to_json(incl_uniqueid=incl_uniqueid, exclude=['description', 'advanced', 'readonly', 'copy_for', 'latexfmt', 'labels_latex', 'label_latex']))))
+        script.append("bdict = json.loads('{}', object_pairs_hook=phoebe.utils.parse_json);".format(json.dumps(self.exclude(context=exclude_contexts).exclude(qualifier=exclude_qualifiers).exclude(distribution=exclude_distributions).exclude(solution=exclude_solutions).exclude(feature=exclude_features).to_json(incl_uniqueid=incl_uniqueid, exclude=['description', 'advanced', 'readonly', 'copy_for', 'latexfmt', 'labels_latex', 'label_latex']))))
         script.append("b = phoebe.open(bdict, import_from_older={});".format(import_from_older))
         # TODO: make sure this works with multiple computes
         compute_kwargs = list(kwargs.items())+[('compute', compute), ('model', str(model)), ('dataset', dataset), ('do_create_fig_params', do_create_fig_params)]
@@ -11538,7 +11533,7 @@ class Bundle(ParameterSet):
 
         if use_server is None:
             for compute in computes:
-                use_server_this = self.get_value(qualifier='use_server', compute=compute, context='compute', **_skip_filter_checks)
+                use_server_this = self.get_value(qualifier='use_server', compute=compute, context='compute')
                 if use_server is not None and use_server_this != use_server:
                     raise ValueError("multiple values found for server among compute options")
                 use_server = use_server_this
@@ -11560,7 +11555,7 @@ class Bundle(ParameterSet):
 
         # Figure options for this model
         # Since auto_add_figure is applied to the DATASET, we will always add model-dependent options
-        if do_create_fig_params and not removed and ret_ps.model not in self.filter(context='figure', **_skip_filter_checks).models:
+        if do_create_fig_params and not removed and ret_ps.model not in self.filter(context='figure').models:
             fig_params = _figure._run_compute(self, **kwargs)
 
             fig_metawargs = {'context': 'figure',
@@ -11725,7 +11720,7 @@ class Bundle(ParameterSet):
 
         if use_server is None:
             for compute in computes:
-                use_server_this = self.get_value(qualifier='use_server', compute=compute, context='compute', **_skip_filter_checks)
+                use_server_this = self.get_value(qualifier='use_server', compute=compute, context='compute')
                 if use_server is not None and use_server_this != use_server:
                     raise ValueError("multiple values found for server among compute options")
                 use_server = use_server_this
@@ -11827,7 +11822,7 @@ class Bundle(ParameterSet):
             self._attach_params([job_param], check_copy_for=False, **metawargs)
 
             for compute in computes:
-                comment_param = StringParameter(qualifier='comments', value=kwargs.get('comments', self.get_value(qualifier='comments', compute=compute, context='compute', default='', **_skip_filter_checks)), description='User-provided comments for this model.  Feel free to place any notes here.')
+                comment_param = StringParameter(qualifier='comments', value=kwargs.get('comments', self.get_value(qualifier='comments', compute=compute, context='compute', default='')), description='User-provided comments for this model.  Feel free to place any notes here.')
                 metawargs = {'context': 'model', 'model': model, 'compute': compute}
                 self._attach_params([comment_param], check_copy_for=False, **metawargs)
 
@@ -11893,14 +11888,14 @@ class Bundle(ParameterSet):
                 dataset_this_compute = datasets
                 # remove any that are disabled
                 if dataset_this_compute is None:
-                    dataset_this_compute = computeparams.filter(qualifier='enabled', value=True, **_skip_filter_checks).datasets
+                    dataset_this_compute = computeparams.filter(qualifier='enabled', value=True).datasets
                 else:
-                    dataset_this_compute = [ds[0] if isinstance(ds, tuple) else ds for ds in dataset_this_compute if 'enabled' in computeparams.filter(qualifier='enabled', dataset=ds[0] if isinstance(ds, tuple) else ds, **_skip_filter_checks).qualifiers]
+                    dataset_this_compute = [ds[0] if isinstance(ds, tuple) else ds for ds in dataset_this_compute if 'enabled' in computeparams.filter(qualifier='enabled', dataset=ds[0] if isinstance(ds, tuple) else ds).qualifiers]
 
                 # if sampling is enabled then we need to pass things off now
                 # to the sampler.  The sampler will then make handle parallelization
                 # and per-sample calls to run_compute.
-                sample_from = computeparams.get_value(qualifier='sample_from', expand=True, sample_from=kwargs.pop('sample_from', None), **_skip_filter_checks)
+                sample_from = computeparams.get_value(qualifier='sample_from', expand=True, sample_from=kwargs.pop('sample_from', None))
                 if len(sample_from):
                     params = backends.SampleOverModel().run(self, computeparams.compute,
                                                             dataset=dataset_this_compute,
@@ -11962,16 +11957,16 @@ class Bundle(ParameterSet):
                 for ds in ml_params.datasets:
                     # not all dataset-types currently support exposure times.
                     # Once they do, this ugly if statement can be removed
-                    if len(self.filter(dataset=ds, qualifier='exptime', **_skip_filter_checks)):
-                        exptime = self.get_value(qualifier='exptime', dataset=ds, context='dataset', unit=u.d, **_skip_filter_checks)
+                    if len(self.filter(dataset=ds, qualifier='exptime')):
+                        exptime = self.get_value(qualifier='exptime', dataset=ds, context='dataset', unit=u.d)
                         if exptime > 0:
                             logger.info("handling fti for dataset='{}'".format(ds))
-                            if self.get_value(qualifier='fti_method', dataset=ds, compute=compute, context='compute', fti_method=kwargs.get('fti_method', None), **_skip_filter_checks)=='oversample':
-                                times_ds = self.get_value(qualifier='compute_times', dataset=ds, context='dataset', **_skip_filter_checks)
+                            if self.get_value(qualifier='fti_method', dataset=ds, compute=compute, context='compute', fti_method=kwargs.get('fti_method', None))=='oversample':
+                                times_ds = self.get_value(qualifier='compute_times', dataset=ds, context='dataset')
                                 if not len(times_ds):
-                                    times_ds = self.get_value(qualifier='times', dataset=ds, context='dataset', **_skip_filter_checks)
+                                    times_ds = self.get_value(qualifier='times', dataset=ds, context='dataset')
                                 # exptime = self.get_value(qualifier='exptime', dataset=ds, context='dataset', unit=u.d)
-                                fti_oversample = self.get_value(qualifier='fti_oversample', dataset=ds, compute=compute, context='compute', fti_oversample=kwargs.get('fti_oversample', None), **_skip_filter_checks)
+                                fti_oversample = self.get_value(qualifier='fti_oversample', dataset=ds, compute=compute, context='compute', fti_oversample=kwargs.get('fti_oversample', None))
                                 # NOTE: this is hardcoded for LCs which is the
                                 # only dataset that currently supports oversampling,
                                 # but this will need to be generalized if/when
@@ -11983,8 +11978,8 @@ class Bundle(ParameterSet):
                                 # exposures to "overlap" each other, so we'll
                                 # later need to determine which times (and
                                 # therefore fluxes) belong to which datapoint
-                                times_oversampled_sorted = ml_params.get_value(qualifier='times', dataset=ds, **_skip_filter_checks)
-                                fluxes_oversampled = ml_params.get_value(qualifier='fluxes', dataset=ds, **_skip_filter_checks)
+                                times_oversampled_sorted = ml_params.get_value(qualifier='times', dataset=ds)
+                                fluxes_oversampled = ml_params.get_value(qualifier='fluxes', dataset=ds)
 
                                 for i,t in enumerate(times_ds):
                                     # rebuild the unsorted oversampled times - see backends._extract_from_bundle_by_time
@@ -11994,12 +11989,12 @@ class Bundle(ParameterSet):
 
                                     fluxes[i] = np.mean(fluxes_oversampled[sample_inds])
 
-                                ml_params.set_value(qualifier='times', dataset=ds, value=times_ds, ignore_readonly=True, **_skip_filter_checks)
-                                ml_params.set_value(qualifier='fluxes', dataset=ds, value=fluxes, ignore_readonly=True, **_skip_filter_checks)
+                                ml_params.set_value(qualifier='times', dataset=ds, value=times_ds, ignore_readonly=True)
+                                ml_params.set_value(qualifier='fluxes', dataset=ds, value=fluxes, ignore_readonly=True)
 
                 # handle scaling to absolute fluxes as necessary for alternate backends
                 # NOTE: this must happen BEFORE dataset-scaling as that scaling assumes absolute fluxes
-                for flux_param in ml_params.filter(qualifier='fluxes', kind='lc', **_skip_filter_checks).to_list():
+                for flux_param in ml_params.filter(qualifier='fluxes', kind='lc').to_list():
                     fluxes = flux_param.get_value(unit=u.W/u.m**2)
                     if computeparams.kind not in ['phoebe', 'legacy']:
                         # then we need to scale the "normalized" fluxes to pbflux first
@@ -12010,8 +12005,8 @@ class Bundle(ParameterSet):
                         flux_param.set_value(fluxes, ignore_readonly=True)
 
                 # handle vgamma
-                vgamma = self.get_value(qualifier='vgamma', context='system', unit=u.km/u.s, **_skip_filter_checks)
-                for rv_param in ml_params.filter(qualifier='rvs', kind='rv', **_skip_filter_checks).to_list():
+                vgamma = self.get_value(qualifier='vgamma', context='system', unit=u.km/u.s)
+                for rv_param in ml_params.filter(qualifier='rvs', kind='rv').to_list():
                     dataset = rv_param.dataset
                     component = rv_param.component
 
@@ -12023,8 +12018,8 @@ class Bundle(ParameterSet):
 
                 # handle all dataset-features (except for GPs, which need to all be handled simultaneously
                 # and AFTER - instead of BEFORE - dataset-scaling from pblum_mode='dataset-scaled')
-                enabled_features = self.filter(qualifier='enabled', compute=compute, context='compute', value=True, **_skip_filter_checks).features
-                enabled_dataset_features = self.filter(qualifier='feature_type', feature=enabled_features, context='feature', value='dataset', **_skip_filter_checks).features
+                enabled_features = self.filter(qualifier='enabled', compute=compute, context='compute', value=True).features
+                enabled_dataset_features = self.filter(qualifier='feature_type', feature=enabled_features, context='feature', value='dataset').features
                 for feature in enabled_dataset_features:
                     feature_obj = self.get_feature_code(feature=feature)
                     feature_obj.modify_model(self, ml_params)
@@ -12032,9 +12027,9 @@ class Bundle(ParameterSet):
                 # handle flux scaling for any pblum_mode == 'dataset-scaled'
                 # or for any dataset in which pblum_mode == 'dataset-coupled' and pblum_dataset points to a 'dataset-scaled' dataset
                 datasets_dsscaled = []
-                coupled_datasets = self.filter(qualifier='pblum_mode', dataset=ml_params.datasets, value='dataset-coupled', **_skip_filter_checks).datasets
-                for pblum_mode_param in self.filter(qualifier='pblum_mode', dataset=ml_params.datasets, value='dataset-scaled', **_skip_filter_checks).to_list():
-                    this_dsscale_datasets = [pblum_mode_param.dataset] + self.filter(qualifier='pblum_dataset', dataset=coupled_datasets, value=pblum_mode_param.dataset, **_skip_filter_checks).datasets
+                coupled_datasets = self.filter(qualifier='pblum_mode', dataset=ml_params.datasets, value='dataset-coupled').datasets
+                for pblum_mode_param in self.filter(qualifier='pblum_mode', dataset=ml_params.datasets, value='dataset-scaled').to_list():
+                    this_dsscale_datasets = [pblum_mode_param.dataset] + self.filter(qualifier='pblum_dataset', dataset=coupled_datasets, value=pblum_mode_param.dataset).datasets
                     # keep track of all datasets that are scaled so we don't do distance/l3 corrections later
                     datasets_dsscaled += this_dsscale_datasets
                     logger.info("rescaling fluxes to data for dataset={}".format(this_dsscale_datasets))
@@ -12047,24 +12042,24 @@ class Bundle(ParameterSet):
                     model_fluxess_interp = np.array([])
 
                     for dataset in this_dsscale_datasets:
-                        ds_obs = self.get_dataset(dataset, **_skip_filter_checks)
+                        ds_obs = self.get_dataset(dataset)
                         ds_times = ds_obs.get_value(qualifier='times')
 
-                        l3_mode = ds_obs.get_value(qualifier='l3_mode', **_skip_filter_checks)
+                        l3_mode = ds_obs.get_value(qualifier='l3_mode')
                         if l3_mode == 'flux':
-                            l3_flux = ds_obs.get_value(qualifier='l3', unit=u.W/u.m**2, **_skip_filter_checks)
+                            l3_flux = ds_obs.get_value(qualifier='l3', unit=u.W/u.m**2)
                             l3_fluxes = np.append(l3_fluxes, np.full_like(ds_times, fill_value=l3_flux))
                             l3_fracs = np.append(l3_fracs, np.zeros_like(ds_times))
                             l3_pblum_abs_sums = np.append(l3_pblum_abs_sums, np.zeros_like(ds_times))
                         else:
-                            l3_frac = ds_obs.get_value(qualifier='l3_frac', **_skip_filter_checks)
+                            l3_frac = ds_obs.get_value(qualifier='l3_frac')
                             l3_fluxes = np.append(l3_fluxes, np.zeros_like(ds_times))
                             l3_fracs = np.append(l3_fracs, np.full_like(ds_times, fill_value=l3_frac))
                             l3_pblum_abs_sums = np.append(l3_pblum_abs_sums, np.full_like(ds_times, fill_value=np.sum(list(pblums_abs.get(dataset).values()))))
 
-                        ds_fluxes = ds_obs.get_value(qualifier='fluxes', unit=u.W/u.m**2, **_skip_filter_checks)
+                        ds_fluxes = ds_obs.get_value(qualifier='fluxes', unit=u.W/u.m**2)
                         ds_fluxess = np.append(ds_fluxess, ds_fluxes)
-                        ds_sigmas = ds_obs.get_value(qualifier='sigmas', **_skip_filter_checks)
+                        ds_sigmas = ds_obs.get_value(qualifier='sigmas')
                         if len(ds_sigmas):
                             ds_sigmass = np.append(ds_sigmass, ds_sigmas)
                         else:
@@ -12072,8 +12067,8 @@ class Bundle(ParameterSet):
                             logger.warning("dataset-scaling: adopting sigmas={} for dataset='{}'".format(sigma_est, dataset))
                             ds_sigmass = np.append(ds_sigmass, sigma_est*np.ones(len(ds_fluxes)))
 
-                        ml_ds = ml_params.filter(dataset=dataset, **_skip_filter_checks)
-                        model_fluxes_interp = ml_ds.get_parameter(qualifier='fluxes', dataset=dataset, **_skip_filter_checks).interp_value(times=ds_times, parent_ps=ml_ds, bundle=self, consider_gaussian_process=False)
+                        ml_ds = ml_params.filter(dataset=dataset)
+                        model_fluxes_interp = ml_ds.get_parameter(qualifier='fluxes', dataset=dataset).interp_value(times=ds_times, parent_ps=ml_ds, bundle=self, consider_gaussian_process=False)
                         model_fluxess_interp = np.append(model_fluxess_interp, model_fluxes_interp)
 
                     scale_factor_approx = np.median(ds_fluxess / model_fluxess_interp)
@@ -12090,19 +12085,19 @@ class Bundle(ParameterSet):
                     popt, pcov = cfit(_scale_fluxes_cfit, model_fluxess_interp, ds_fluxess, p0=(scale_factor_approx), sigma=ds_sigmass)
                     scale_factor = popt[0]
 
-                    for flux_param in ml_params.filter(qualifier='fluxes', dataset=this_dsscale_datasets, **_skip_filter_checks).to_list():
+                    for flux_param in ml_params.filter(qualifier='fluxes', dataset=this_dsscale_datasets).to_list():
                         logger.debug("applying scale_factor={} to fluxes@{}".format(scale_factor, flux_param.dataset))
 
-                        ds_obs = self.get_dataset(dataset=flux_param.dataset, **_skip_filter_checks)
-                        l3_mode = ds_obs.get_value(qualifier='l3_mode', **_skip_filter_checks)
+                        ds_obs = self.get_dataset(dataset=flux_param.dataset)
+                        l3_mode = ds_obs.get_value(qualifier='l3_mode')
                         # this time we can pass floats instead of arrays since only
                         # one will apply to this single dataset
                         if l3_mode == 'flux':
-                            l3_flux = ds_obs.get_value(qualifier='l3', unit=u.W/u.m**2, **_skip_filter_checks)
+                            l3_flux = ds_obs.get_value(qualifier='l3', unit=u.W/u.m**2)
                             l3_frac = 0.0
                             l3_pblum_abs_sum = 0.0
                         else:
-                            l3_frac = ds_obs.get_value(qualifier='l3_frac', **_skip_filter_checks)
+                            l3_frac = ds_obs.get_value(qualifier='l3_frac')
                             l3_flux = 0.0
                             l3_pblum_abs_sum = np.sum(list(pblums_abs.get(dataset).values()))
 
@@ -12112,7 +12107,7 @@ class Bundle(ParameterSet):
 
                         ml_addl_params += [FloatParameter(qualifier='flux_scale', dataset=dataset, value=scale_factor, readonly=True, default_unit=u.dimensionless_unscaled, description='scaling applied to fluxes (intensities/luminosities) due to dataset-scaling')]
 
-                        for mesh_param in ml_params.filter(kind='mesh', **_skip_filter_checks).to_list():
+                        for mesh_param in ml_params.filter(kind='mesh').to_list():
                             if mesh_param.qualifier in ['intensities', 'abs_intensities', 'normal_intensities', 'abs_normal_intensities', 'pblum_ext']:
                                 logger.debug("applying scale_factor={} to {} parameter in mesh".format(scale_factor, mesh_param.qualifier))
                                 mesh_param.set_value(mesh_param.get_value()*scale_factor, ignore_readonly=True)
@@ -12121,8 +12116,8 @@ class Bundle(ParameterSet):
                 if computeparams.kind in ['phoebe', 'legacy']:
                     # handle flux scaling based on distance and l3
                     # NOTE: this must happen AFTER dataset scaling
-                    distance = self.get_value(qualifier='distance', context='system', unit=u.m, **_skip_filter_checks)
-                    for flux_param in ml_params.filter(qualifier='fluxes', kind='lc', **_skip_filter_checks).to_list():
+                    distance = self.get_value(qualifier='distance', context='system', unit=u.m)
+                    for flux_param in ml_params.filter(qualifier='fluxes', kind='lc').to_list():
                         dataset = flux_param.dataset
                         if dataset in datasets_dsscaled:
                             # then we already handle the scaling (including l3)
@@ -12134,10 +12129,10 @@ class Bundle(ParameterSet):
 
                         flux_param.set_value(fluxes, ignore_readonly=True)
 
-                ml_addl_params += [StringParameter(qualifier='comments', value=kwargs.get('comments', computeparams.get_value(qualifier='comments', default='', **_skip_filter_checks)), description='User-provided comments for this model.  Feel free to place any notes here.')]
+                ml_addl_params += [StringParameter(qualifier='comments', value=kwargs.get('comments', computeparams.get_value(qualifier='comments', default='')), description='User-provided comments for this model.  Feel free to place any notes here.')]
                 self._attach_params(ml_params+ml_addl_params, check_copy_for=False, **metawargs)
 
-                model_ps = self.get_model(model=model, **_skip_filter_checks)
+                model_ps = self.get_model(model=model)
 
                 # add any GPs (gaussian processes) to the returned model
                 # NOTE: this has to happen after _attach_params as it uses
@@ -12151,7 +12146,7 @@ class Bundle(ParameterSet):
 
         restore_conf()
 
-        ret_ps = self.filter(model=model, context=None if return_changes else 'model', **_skip_filter_checks)
+        ret_ps = self.filter(model=model, context=None if return_changes else 'model')
         ret_changes += self._run_compute_changes(ret_ps,
                                                  return_changes=return_changes,
                                                  do_create_fig_params=do_create_fig_params,
@@ -12637,7 +12632,7 @@ class Bundle(ParameterSet):
         solver_kind = func.__name__
         if solver_kind in ['ebai']:
             for orbit in self.hierarchy.get_orbits():
-                orbit_ps = self.get_orbit(component=orbit, **_skip_filter_checks)
+                orbit_ps = self.get_orbit(component=orbit)
                 for constraint in ['teffratio', 'requivsumfrac']:
                     if constraint not in orbit_ps.qualifiers:
                         logger.warning("adding {} constraint to {} orbit (needed for {} solver)".format(constraint, orbit, solver_kind))
@@ -12660,7 +12655,7 @@ class Bundle(ParameterSet):
             overwrite_ps = self.remove_solver(solver=kwargs['solver'], auto_remove_figure=False, during_overwrite=True)
             # check the label again, just in case kwargs['solver'] belongs to
             # something other than solver
-            self.exclude(context='solution', **_skip_filter_checks)._check_label(kwargs['solver'], allow_overwrite=False)
+            self.exclude(context='solution')._check_label(kwargs['solver'], allow_overwrite=False)
 
         logger.info("adding {} '{}' solver to bundle".format(metawargs['kind'], metawargs['solver']))
         self._attach_params(params, **metawargs)
@@ -12691,7 +12686,7 @@ class Bundle(ParameterSet):
         qualifiers = ret_ps.qualifiers
         for k,v in kwargs.items():
             if k in qualifiers:
-                ret_ps.set_value_all(qualifier=k, value=v, **_skip_filter_checks)
+                ret_ps.set_value_all(qualifier=k, value=v)
             # TODO: else raise warning?
 
         if return_changes:
@@ -12749,9 +12744,9 @@ class Bundle(ParameterSet):
 
         ret_changes = []
 
-        auto_remove_figure = self.get_value(qualifier='auto_remove_figure', context='setting', auto_remove_figure=kwargs.get('auto_remove_figure', None), default=False, **_skip_filter_checks)
+        auto_remove_figure = self.get_value(qualifier='auto_remove_figure', context='setting', auto_remove_figure=kwargs.get('auto_remove_figure', None), default=False)
         if auto_remove_figure:
-            for param in self.filter(qualifier='solver', context='figure', kind=ret_ps.kind, **_skip_filter_checks).to_list():
+            for param in self.filter(qualifier='solver', context='figure', kind=ret_ps.kind).to_list():
                 if param.get_value() == solver:
                     ret_changes += self.remove_figure(param.figure, return_changes=return_changes).to_list()
 
@@ -12839,13 +12834,13 @@ class Bundle(ParameterSet):
                 raise ValueError("must provide label of solver options since more than one are attached.  The following were found: {}".format(self.solvers))
 
 
-        solver_ps = self.get_solver(solver=solver, kind=kwargs.get('kind'), **_skip_filter_checks)
+        solver_ps = self.get_solver(solver=solver, kind=kwargs.get('kind'))
         if solver_ps is None:
             raise ValueError("could not find solver with solver={} kwargs={}".format(solver, kwargs))
 
         if 'compute' in solver_ps.qualifiers:
-            compute = kwargs.pop('compute', solver_ps.get_value(qualifier='compute', **_skip_filter_checks))
-            compute_ps = self.get_compute(compute=compute, **_skip_filter_checks)
+            compute = kwargs.pop('compute', solver_ps.get_value(qualifier='compute'))
+            compute_ps = self.get_compute(compute=compute)
 
             if len(compute_ps.computes) > 1:
                 raise ValueError("more than one set of compute options attached, must provide compute")
@@ -12892,10 +12887,10 @@ class Bundle(ParameterSet):
         continue_from = self.get_value(qualifier='continue_from', solver=solver, continue_from=kwargs.get('continue_from', None), default='')
         exclude_solutions = [sol for sol in self.solutions if sol!=continue_from]
         exclude_solvers = [s for s in self.solvers if s!=solver]
-        solver_ps = self.get_solver(solver=solver, **_skip_filter_checks)
+        solver_ps = self.get_solver(solver=solver)
         if 'compute' in solver_ps.qualifiers:
-            compute = kwargs.get('compute', solver_ps.get_value(qualifier='compute', **_skip_filter_checks))
-            exclude_features = [feature for feature in self.features if not self.get_value(qualifier='enabled', feature=feature, compute=compute, **_skip_filter_checks)]
+            compute = kwargs.get('compute', solver_ps.get_value(qualifier='compute'))
+            exclude_features = [feature for feature in self.features if not self.get_value(qualifier='enabled', feature=feature, compute=compute)]
         else:
             exclude_features = []
             exclude_contexts += ['feature', 'compute']
@@ -12904,11 +12899,11 @@ class Bundle(ParameterSet):
         exclude_distributions = [d for d in self.distributions if d not in needed_distributions]
         if 'continue_from_ps' in kwargs.keys():
             b = self.copy()
-            b._attach_params(kwargs.pop('continue_from_ps').exclude(qualifier='detached_job', **_skip_filter_checks).copy())
+            b._attach_params(kwargs.pop('continue_from_ps').exclude(qualifier='detached_job').copy())
         else:
             b = self
 
-        script.append("bdict = json.loads('{}', object_pairs_hook=phoebe.utils.parse_json);".format(json.dumps(b.exclude(context=exclude_contexts, **_skip_filter_checks).exclude(qualifier=exclude_qualifiers, **_skip_filter_checks).exclude(solution=exclude_solutions, **_skip_filter_checks).exclude(solver=exclude_solvers, **_skip_filter_checks).exclude(distribution=exclude_distributions, **_skip_filter_checks).exclude(feature=exclude_features, **_skip_filter_checks).to_json(incl_uniqueid=True, exclude=['description', 'advanced', 'readonly', 'copy_for', 'latexfmt', 'labels_latex', 'label_latex']))))
+        script.append("bdict = json.loads('{}', object_pairs_hook=phoebe.utils.parse_json);".format(json.dumps(b.exclude(context=exclude_contexts).exclude(qualifier=exclude_qualifiers).exclude(solution=exclude_solutions).exclude(solver=exclude_solvers).exclude(distribution=exclude_distributions).exclude(feature=exclude_features).to_json(incl_uniqueid=True, exclude=['description', 'advanced', 'readonly', 'copy_for', 'latexfmt', 'labels_latex', 'label_latex']))))
         script.append("b = phoebe.open(bdict, import_from_older={});".format(import_from_older))
 
         custom_lnprobability_callable = kwargs.get('custom_lnprobability_callable', None)
@@ -12947,7 +12942,7 @@ class Bundle(ParameterSet):
         script.append("b.filter(context='solution', solution=solution_ps.solution, check_visible=False).save(out_fname, incl_uniqueid=True);")
 
         if use_server and use_server != 'none':
-            deps_pip, _ = self.dependencies(solver=solver, compute=self.get_value(qualifier='compute', solver=solver, default=[], **_skip_filter_checks))
+            deps_pip, _ = self.dependencies(solver=solver, compute=self.get_value(qualifier='compute', solver=solver, default=[]))
             if ".dev" in __version__ and len(deps_pip):
                 deps_pip.append('--ignore-installed')
             self._write_crimpl_script(script_fname, script, use_server, deps_pip, autocontinue, kwargs)
@@ -13023,9 +13018,9 @@ class Bundle(ParameterSet):
           in the model being written to `out_fname`.
 
         """
-        use_server = kwargs.get('use_server', kwargs.get('server', self.get_value(qualifier='use_server', solver=solver, context='solver', **_skip_filter_checks)))
+        use_server = kwargs.get('use_server', kwargs.get('server', self.get_value(qualifier='use_server', solver=solver, context='solver')))
         if use_server == 'compute':
-            use_server = self.get_value(qualifier='use_server', compute=self.get_value(qualifier='compute', solver=solver, context='solver', **_skip_filter_checks), context='compute', **_skip_filter_checks)
+            use_server = self.get_value(qualifier='use_server', compute=self.get_value(qualifier='compute', solver=solver, context='solver'), context='compute')
 
         solver, solution, compute, solver_ps = self._prepare_solver(solver, solution, from_export=True, **kwargs)
         script_fname, out_fname = self._write_export_solver_script(script_fname, out_fname, solver, solution, autocontinue, use_server, import_from_older, log_level, kwargs)
@@ -13046,11 +13041,11 @@ class Bundle(ParameterSet):
         """
         ret_changes = []
 
-        auto_add_figure = self.get_value(qualifier='auto_add_figure', context='setting', auto_add_figure=auto_add_figure, default=False, **_skip_filter_checks)
-        auto_remove_figure = self.get_value(qualifier='auto_remove_figure', context='setting', auto_remove_figure=auto_remove_figure, default=False, **_skip_filter_checks)
+        auto_add_figure = self.get_value(qualifier='auto_add_figure', context='setting', auto_add_figure=auto_add_figure, default=False)
+        auto_remove_figure = self.get_value(qualifier='auto_remove_figure', context='setting', auto_remove_figure=auto_remove_figure, default=False)
 
         def _figure_match(solution, kinds):
-            for p in self.filter(qualifier='solution', context='figure', kind=kinds, **_skip_filter_checks).to_list():
+            for p in self.filter(qualifier='solution', context='figure', kind=kinds).to_list():
                 # check to see if there is a solver match or all options removed (in which case probably from an overwrite=True)
                 if p.get_value() == solution or not len(p.choices):
                     return True
@@ -13072,7 +13067,7 @@ class Bundle(ParameterSet):
                     ret_changes += self._handle_solution_selectparams(return_changes=return_changes)
                 new_fig_params.set_value_all(qualifier='solution', context='figure', value=ret_ps.solution)
         elif auto_remove_figure and removed:
-            for param in self.filter(qualifier='solution', context='figure', kind=ret_ps.kind, **_skip_filter_checks).to_list():
+            for param in self.filter(qualifier='solution', context='figure', kind=ret_ps.kind).to_list():
                 if param.get_value() == ret_ps.solution:
                     ret_changes += self.remove_figure(param.figure, return_changes=return_changes, during_overwrite=during_overwrite).to_list()
 
@@ -13152,16 +13147,16 @@ class Bundle(ParameterSet):
         # so that this is also callable from the frontend for the user or by passing solver to run_compute
 
         # handle solver_times
-        for param in self.filter(qualifier='solver_times', **_skip_filter_checks).to_list():
+        for param in self.filter(qualifier='solver_times').to_list():
             # TODO: skip if this dataset is disabled for compute?
             # TODO: any change in logic for time-dependent systems?
 
             solver_times = param.get_value()
-            ds_ps = self.get_dataset(dataset=param.dataset, **_skip_filter_checks)
-            mask_enabled = ds_ps.get_value(qualifier='mask_enabled', default=False, **_skip_filter_checks)
+            ds_ps = self.get_dataset(dataset=param.dataset)
+            mask_enabled = ds_ps.get_value(qualifier='mask_enabled', default=False)
             if mask_enabled:
-                mask_phases = ds_ps.get_value(qualifier='mask_phases', **_skip_filter_checks)
-                mask_t0 = ds_ps.get_value(qualifier='phases_t0', **_skip_filter_checks)
+                mask_phases = ds_ps.get_value(qualifier='mask_phases')
+                mask_t0 = ds_ps.get_value(qualifier='phases_t0')
             else:
                 mask_phases = None
                 mask_t0 = 't0_supconj'
@@ -13227,18 +13222,18 @@ class Bundle(ParameterSet):
                         compute_times_per_ds[param.dataset] = masked_times
                 elif new_compute_times is None:
                     if masked_compute_times is None:
-                        compute_times_per_ds[param.dataset] = ds_ps.get_value(qualifier='compute_times', unit=u.d, **_skip_filter_checks)
+                        compute_times_per_ds[param.dataset] = ds_ps.get_value(qualifier='compute_times', unit=u.d)
                     else:
                         compute_times_per_ds[param.dataset] = masked_compute_times
                 else:
                     compute_times_per_ds[param.dataset] = new_compute_times
 
             if set_compute_times and new_compute_times is not None:
-                if ds_ps.get_parameter(qualifier='compute_times', **_skip_filter_checks).is_constraint is not None:
+                if ds_ps.get_parameter(qualifier='compute_times').is_constraint is not None:
                     # this is in the deepcopied bundle, so we can overwrite compute_times directly
                     self.flip_constraint(qualifier='compute_times', dataset=ds_ps.dataset, solve_for='compute_phases')
                 logger.info("solver_times={} (dataset={}): setting compute_times".format(solver_times, param.dataset))
-                ds_ps.set_value_all(qualifier='compute_times', value=new_compute_times, **_skip_filter_checks)
+                ds_ps.set_value_all(qualifier='compute_times', value=new_compute_times)
 
         if return_as_dict:
             return compute_times_per_ds
@@ -13344,9 +13339,9 @@ class Bundle(ParameterSet):
             solver = self.get_solver(**kwargs).solver
 
         # TODO: will server be able to be used as a default here
-        use_server = kwargs.get('use_server', kwargs.get('server', self.get_value(qualifier='use_server', solver=solver, context='solver', **_skip_filter_checks)))
+        use_server = kwargs.get('use_server', kwargs.get('server', self.get_value(qualifier='use_server', solver=solver, context='solver')))
         if use_server == 'compute':
-            use_server = self.get_value(qualifier='use_server', compute=self.get_value(qualifier='compute', solver=solver, context='solver', **_skip_filter_checks), **_skip_filter_checks)
+            use_server = self.get_value(qualifier='use_server', compute=self.get_value(qualifier='compute', solver=solver, context='solver'))
         job_sleep = kwargs.get('sleep', 10)
 
         solver, solution, compute, solver_ps = self._prepare_solver(solver, solution, from_export=False, **kwargs)
@@ -13472,7 +13467,7 @@ class Bundle(ParameterSet):
                 s = _crimpl.LocalThreadServer('./phoebe_crimpl_jobs')
 
             if install_deps:
-                deps_pip, deps_other = self.dependencies(solver=solver, compute=self.get_value(qualifier='compute', solver=solver, default=[], **_skip_filter_checks))
+                deps_pip, deps_other = self.dependencies(solver=solver, compute=self.get_value(qualifier='compute', solver=solver, default=[]))
                 if len(deps_other):
                     # TODO: do something better with this
                     raise ValueError("cannot automatically install {}".format(deps_other))
@@ -13501,7 +13496,7 @@ class Bundle(ParameterSet):
             metawargs = {'context': 'solution', 'solution': solution, 'solver': solver, 'server': use_server if use_server!='none' else None}
             self._attach_params([job_param], check_copy_for=False, **metawargs)
 
-            comment_param = StringParameter(qualifier='comments', value=kwargs.get('comments', solver_ps.get_value(qualifier='comments', default='', **_skip_filter_checks)), description='User-provided comments for this solution.  Feel free to place any notes here.')
+            comment_param = StringParameter(qualifier='comments', value=kwargs.get('comments', solver_ps.get_value(qualifier='comments', default='')), description='User-provided comments for this solution.  Feel free to place any notes here.')
             metawargs = {'context': 'solution', 'solution': solution, 'solver': solver}
             self._attach_params([comment_param], check_copy_for=False, **metawargs)
 
@@ -13531,7 +13526,7 @@ class Bundle(ParameterSet):
                      'solution': solution}
 
 
-        comment_param = StringParameter(qualifier='comments', value=kwargs.get('comments', solver_ps.get_value(qualifier='comments', default='', **_skip_filter_checks)), description='User-provided comments for this solution.  Feel free to place any notes here.')
+        comment_param = StringParameter(qualifier='comments', value=kwargs.get('comments', solver_ps.get_value(qualifier='comments', default='')), description='User-provided comments for this solution.  Feel free to place any notes here.')
         self._attach_params(params+[comment_param], check_copy_for=False, **metawargs)
 
         restore_conf()
@@ -13549,25 +13544,25 @@ class Bundle(ParameterSet):
 
     def _get_adopt_inds_uniqueids(self, solution_ps, **kwargs):
 
-        adopt_parameters = solution_ps.get_value(qualifier='adopt_parameters', adopt_parameters=kwargs.get('adopt_parameters', kwargs.get('parameters', None)), expand=True, **_skip_filter_checks)
-        fitted_uniqueids = solution_ps.get_value(qualifier='fitted_uniqueids', **_skip_filter_checks).tolist()
-        fitted_twigs = solution_ps.get_value(qualifier='fitted_twigs', **_skip_filter_checks)
+        adopt_parameters = solution_ps.get_value(qualifier='adopt_parameters', adopt_parameters=kwargs.get('adopt_parameters', kwargs.get('parameters', None)), expand=True)
+        fitted_uniqueids = solution_ps.get_value(qualifier='fitted_uniqueids').tolist()
+        fitted_twigs = solution_ps.get_value(qualifier='fitted_twigs')
         # NOTE: all of these could have twig[index] notation
 
         b_uniqueids = self.uniqueids
 
-        adoptable_ps = self.get_adjustable_parameters(exclude_constrained=False) + self.filter(qualifier='mask_phases', context='dataset', **_skip_filter_checks)
+        adoptable_ps = self.get_adjustable_parameters(exclude_constrained=False) + self.filter(qualifier='mask_phases', context='dataset')
         if np.all([uniqueid.split('[')[0] in b_uniqueids for uniqueid in fitted_uniqueids]):
-            fitted_ps = adoptable_ps.filter(uniqueid=[uniqueid.split('[')[0] for uniqueid in fitted_uniqueids], **_skip_filter_checks)
+            fitted_ps = adoptable_ps.filter(uniqueid=[uniqueid.split('[')[0] for uniqueid in fitted_uniqueids])
         else:
             logger.warning("not all uniqueids in fitted_uniqueids@{}@solution are still valid.  Falling back on twigs.  Save and load same bundle to prevent this extra cost.".format(solution_ps.solution))
-            fitted_ps = adoptable_ps.filter(twig=[t.split('[')[0] for t in fitted_twigs.tolist()], **_skip_filter_checks)
-            fitted_uniqueids = [fitted_ps.get_parameter(twig=fitted_twig, **_skip_filter_checks).uniqueid for fitted_twig in fitted_twigs]
+            fitted_ps = adoptable_ps.filter(twig=[t.split('[')[0] for t in fitted_twigs.tolist()])
+            fitted_uniqueids = [fitted_ps.get_parameter(twig=fitted_twig).uniqueid for fitted_twig in fitted_twigs]
 
         adopt_uniqueids = []
         for adopt_twig_orig in adopt_parameters:
             adopt_twig, index = _extract_index_from_string(adopt_twig_orig)
-            fitted_ps_filtered = fitted_ps.filter(twig=adopt_twig, **_skip_filter_checks)
+            fitted_ps_filtered = fitted_ps.filter(twig=adopt_twig)
             if len(fitted_ps_filtered) == 1:
                 puid = fitted_ps_filtered.get_parameter(**_skip_filter_checks).uniqueid
                 adopt_uniqueids.append(puid if index is None else puid+'[{}]'.format(index))
@@ -13649,8 +13644,8 @@ class Bundle(ParameterSet):
 
         if not (adopt_distributions is None or isinstance(adopt_distributions, bool)):
             raise TypeError("adopt_distributions must be None or bool.  To set the label of the resulting distribution, use distribution instead.")
-        adopt_distributions = solution_ps.get_value(qualifier='adopt_distributions', adopt_distributions=adopt_distributions, **_skip_filter_checks)
-        adopt_values = solution_ps.get_value(qualifier='adopt_values', adopt_values=adopt_values, **_skip_filter_checks)
+        adopt_distributions = solution_ps.get_value(qualifier='adopt_distributions', adopt_distributions=adopt_distributions)
+        adopt_values = solution_ps.get_value(qualifier='adopt_values', adopt_values=adopt_values)
 
         ret_changes = ParameterSet([])
         if adopt_distributions:
@@ -13674,7 +13669,7 @@ class Bundle(ParameterSet):
         if not len(adopt_inds):
             raise ValueError('no (valid) parameters selected by adopt_parameters')
 
-        fitted_units = solution_ps.get_value(qualifier='fitted_units', **_skip_filter_checks)
+        fitted_units = solution_ps.get_value(qualifier='fitted_units')
 
         user_interactive_constraints = conf.interactive_constraints
         conf.interactive_constraints_off(suppress_warning=True)
@@ -13695,12 +13690,12 @@ class Bundle(ParameterSet):
             # check to make sure no constraint issues
             for uniqueid in adopt_uniqueids:
                 uniqueid, index = _extract_index_from_string(uniqueid)
-                param = self.get_parameter(uniqueid=uniqueid, **_skip_filter_checks)
+                param = self.get_parameter(uniqueid=uniqueid)
                 if len(param.constrained_by):
                     constrained_by_ps = ParameterSet(param.constrained_by)
                     validsolvefor = [v for v in _constraint._validsolvefor.get(param.is_constraint.constraint_func, []) if param.qualifier not in v]
                     if len(validsolvefor) == 1:
-                        solve_for = constrained_by_ps.get_parameter(twig=validsolvefor[0], **_skip_filter_checks)
+                        solve_for = constrained_by_ps.get_parameter(twig=validsolvefor[0])
                         constraint_revert_flip[solve_for.uniqueid] = param.uniqueid
                     else:
                         # NOTE: this case really should already have been handled and raised by run_checks_solution
@@ -13709,8 +13704,8 @@ class Bundle(ParameterSet):
                         raise ValueError("cannot adopt value for {} as it is constrained by multiple parameters: {}.  Flip the constraint manually first, or remove {} from adopt_parameters.".format(param.twig, ", ".join([p.twig for p in param.constrained_by]), param.twig))
 
             for solve_for_uniqueid, constrained_uniqueid in constraint_revert_flip.items():
-                logger.warning("temporarily flipping {} to solve for {}".format(self.get_parameter(uniqueid=constrained_uniqueid, **_skip_filter_checks).twig, self.get_parameter(uniqueid=solve_for_uniqueid, **_skip_filter_checks).twig))
-                self.get_parameter(uniqueid=constrained_uniqueid, **_skip_filter_checks).is_constraint.flip_for(uniqueid=solve_for_uniqueid)
+                logger.warning("temporarily flipping {} to solve for {}".format(self.get_parameter(uniqueid=constrained_uniqueid).twig, self.get_parameter(uniqueid=solve_for_uniqueid).twig))
+                self.get_parameter(uniqueid=constrained_uniqueid).is_constraint.flip_for(uniqueid=solve_for_uniqueid)
 
         if solver_kind in ['emcee', 'dynesty']:
             dist, _ = self.get_distribution_collection(solution=solution, context='solution', **{k:v for k,v in kwargs.items() if k in solution_ps.qualifiers})
@@ -13720,7 +13715,7 @@ class Bundle(ParameterSet):
                 if adopt_distributions:
                     ps = self.add_distribution(uniqueid=uniqueid_orig, value=dist.slice(i), distribution=distribution, auto_add_figure=kwargs.get('auto_add_figure', None), check_label=distribution is not None)
                 if adopt_values:
-                    param = self.get_parameter(uniqueid=uniqueid, **_skip_filter_checks)
+                    param = self.get_parameter(uniqueid=uniqueid)
                     # TODO: what to do if constrained?
                     if trial_run:
                         if param.twig in [p.twig for p in changed_params]:
@@ -13739,16 +13734,16 @@ class Bundle(ParameterSet):
                         param.set_index_value(index=index, value=dist.slice(i).median(), unit=dist.slice(i).unit)
 
         else:
-            fitted_values = solution_ps.get_value(qualifier='fitted_values', **_skip_filter_checks)
+            fitted_values = solution_ps.get_value(qualifier='fitted_values')
 
             if solver_kind in ['lc_periodogram', 'rv_periodogram']:
                 # only the period should be in fitted_values... if that changes,
                 # we'll need more complex logic here
-                fitted_values = fitted_values * solution_ps.get_value(qualifier='period_factor', period_factor=kwargs.get('period_factor', None), **_skip_filter_checks)
+                fitted_values = fitted_values * solution_ps.get_value(qualifier='period_factor', period_factor=kwargs.get('period_factor', None))
 
             if solver_kind in ['lc_geometry']:
 
-                adopt_qualifiers = [self.get_parameter(uniqueid=uniqueid, **_skip_filter_checks).qualifier for uniqueid in adopt_uniqueids]
+                adopt_qualifiers = [self.get_parameter(uniqueid=uniqueid).qualifier for uniqueid in adopt_uniqueids]
                 if 'mask_phases' in adopt_qualifiers and 't0_supconj' in adopt_qualifiers:
                     # then we need to shift mask phases by the phase-shift introduced by the change in t0_supconj
                     logger.info("shifting mask_phases by phase-shift caused by change in t0_supconj")
@@ -13759,7 +13754,7 @@ class Bundle(ParameterSet):
                     mask_phases_ind = adopt_qualifiers.index('mask_phases')
                     t0_supconj_ind = adopt_qualifiers.index('t0_supconj')
 
-                    t0_supconj_old = self.get_value(uniqueid=adopt_uniqueids[t0_supconj_ind], unit=u.d, **_skip_filter_checks)
+                    t0_supconj_old = self.get_value(uniqueid=adopt_uniqueids[t0_supconj_ind], unit=u.d)
                     t0_supconj_new = fitted_values[adopt_inds[t0_supconj_ind]]
 
                     phase_shift = self.to_phase(t0_supconj_new) - self.to_phase(t0_supconj_old)
@@ -13772,7 +13767,7 @@ class Bundle(ParameterSet):
                     dist = _distl.delta(value, unit=unit)
                     ps = self.add_distribution(uniqueid=uniqueid, value=dist, distribution=distribution, auto_add_figure=kwargs.get('auto_add_figure', None), check_label=distribution is not None)
                 if adopt_values:
-                    param = self.get_parameter(uniqueid=uniqueid, **_skip_filter_checks)
+                    param = self.get_parameter(uniqueid=uniqueid)
                     if trial_run:
                         # NOTE: we can't compare uniqueids here since the copy will create a new one
                         if param.twig in [p.twig for p in changed_params]:
@@ -13795,8 +13790,8 @@ class Bundle(ParameterSet):
             conf.interactive_constraints_on()
 
         for constrained_uniqueid, solve_for_uniqueid in constraint_revert_flip.items():
-            logger.warning("reverting {} to solve for {}".format(self.get_parameter(uniqueid=constrained_uniqueid, **_skip_filter_checks).twig, self.get_parameter(uniqueid=solve_for_uniqueid, **_skip_filter_checks).twig))
-            self.get_parameter(uniqueid=constrained_uniqueid, **_skip_filter_checks).is_constraint.flip_for(uniqueid=solve_for_uniqueid)
+            logger.warning("reverting {} to solve for {}".format(self.get_parameter(uniqueid=constrained_uniqueid).twig, self.get_parameter(uniqueid=solve_for_uniqueid).twig))
+            self.get_parameter(uniqueid=constrained_uniqueid).is_constraint.flip_for(uniqueid=solve_for_uniqueid)
 
         ret_ps = ParameterSet([])
         if adopt_distributions:
@@ -13860,7 +13855,7 @@ class Bundle(ParameterSet):
         ------------
         * the output from <phoebe.frontend.bundle.Bundle.run_solver>
         """
-        solution_ps = self.get_solution(solution=solution, **_skip_filter_checks)
+        solution_ps = self.get_solution(solution=solution)
 
         solver = solution_ps.solver
         kwargs.setdefault('solver', solver)
@@ -13902,7 +13897,7 @@ class Bundle(ParameterSet):
         """
         result_ps = ParameterSet.open(fname)
         if 'progress' in result_ps.qualifiers:
-            progress = result_ps.get_value(qualifier='progress', **_skip_filter_checks)
+            progress = result_ps.get_value(qualifier='progress')
             value = 'progress:{}%'.format(np.round(progress, 2)) if progress < 100 else 'completed'
             job_param = StringParameter(qualifier='imported_job',
                                         value=value,
@@ -13934,14 +13929,14 @@ class Bundle(ParameterSet):
 
         self._attach_params(result_ps, override_tags=True, new_uniqueids=new_uniqueids, **metawargs)
 
-        ret_ps = self.get_solution(solution=solution if solution is not None else result_ps.solutions, **_skip_filter_checks)
+        ret_ps = self.get_solution(solution=solution if solution is not None else result_ps.solutions)
 
         # attempt to map fitted_twigs -> fitted_uniqueids if not all match now, to prevent having to continuously repeat
-        fitted_uniqueids = ret_ps.get_value(qualifier='fitted_uniqueids', **_skip_filter_checks)
+        fitted_uniqueids = ret_ps.get_value(qualifier='fitted_uniqueids')
         b_uniqueids = self.uniqueids
         if not np.all([u in b_uniqueids for u in fitted_uniqueids]):
             _, fitted_uniquieds = self._get_adopt_inds_uniqueids(ret_ps, adopt_parameters='*')
-            ret_ps.set_value(qualifier='fitted_uniqueids', value=fitted_uniquieds, ignore_readonly=True, **_skip_filter_checks)
+            ret_ps.set_value(qualifier='fitted_uniqueids', value=fitted_uniquieds, ignore_readonly=True)
 
         ret_changes += self._run_solver_changes(ret_ps, return_changes=return_changes)
 

@@ -24,9 +24,9 @@ def _get_system_ps(b, item, context='component'):
         item = item[0]
 
     if isinstance(item, ParameterSet):
-        return item.filter(context=context, **_skip_filter_checks)
+        return item.filter(context=context)
     elif isinstance(item, str):
-        return b.filter(item, context=context, **_skip_filter_checks)
+        return b.filter(item, context=context)
     else:
         logger.debug("_get_system_ps got {}".format(item))
         raise NotImplementedError("_get_system_ps does not support item with type: {}".format(type(item)))
@@ -413,8 +413,8 @@ def esinw(b, orbit, solve_for=None, **kwargs):
     ecosw_constrained = kwargs.get('ecosw_constrained', len(ecosw.constrained_by) > 0)
     logger.debug("esinw constraint: solve_for={}, ecosw_constrained={}, ecosw_created={}".format(solve_for.qualifier if solve_for is not None else "None", ecosw_constrained, ecosw_created))
 
-    ecc = orbit_ps.get_parameter(qualifier='ecc', **_skip_filter_checks)
-    per0 = orbit_ps.get_parameter(qualifier='per0', **_skip_filter_checks)
+    ecc = orbit_ps.get_parameter(qualifier='ecc')
+    per0 = orbit_ps.get_parameter(qualifier='per0')
 
     if solve_for in [None, esinw]:
         lhs = esinw
@@ -509,8 +509,8 @@ def ecosw(b, orbit, solve_for=None, **kwargs):
     esinw_constrained = kwargs.get('esinw_constrained', len(esinw.constrained_by) > 0)
     logger.debug("ecosw constraint: solve_for={}, esinw_constrained={}, esinw_created={}".format(solve_for.qualifier if solve_for is not None else "None", esinw_constrained, esinw_created))
 
-    ecc = orbit_ps.get_parameter(qualifier='ecc', **_skip_filter_checks)
-    per0 = orbit_ps.get_parameter(qualifier='per0', **_skip_filter_checks)
+    ecc = orbit_ps.get_parameter(qualifier='ecc')
+    per0 = orbit_ps.get_parameter(qualifier='per0')
 
     if solve_for in [None, ecosw]:
         lhs = ecosw
@@ -595,14 +595,14 @@ def t0_perpass_supconj(b, orbit, solve_for=None, **kwargs):
     orbit_ps = _get_system_ps(b, orbit)
 
     # by default both t0s exist in an orbit, so we don't have to worry about creating either
-    t0_perpass = orbit_ps.get_parameter(qualifier='t0_perpass', **_skip_filter_checks)
-    t0_supconj = orbit_ps.get_parameter(qualifier='t0_supconj', **_skip_filter_checks)
-    period = orbit_ps.get_parameter(qualifier='period', **_skip_filter_checks)
-    dpdt = orbit_ps.get_parameter(qualifier='dpdt', **_skip_filter_checks)
-    ecc = orbit_ps.get_parameter(qualifier='ecc', **_skip_filter_checks)
-    per0 = orbit_ps.get_parameter(qualifier='per0', **_skip_filter_checks)
-    dperdt = orbit_ps.get_parameter(qualifier='dperdt', **_skip_filter_checks)
-    t0 = b.get_parameter(qualifier='t0', context='system', **_skip_filter_checks)
+    t0_perpass = orbit_ps.get_parameter(qualifier='t0_perpass')
+    t0_supconj = orbit_ps.get_parameter(qualifier='t0_supconj')
+    period = orbit_ps.get_parameter(qualifier='period')
+    dpdt = orbit_ps.get_parameter(qualifier='dpdt')
+    ecc = orbit_ps.get_parameter(qualifier='ecc')
+    per0 = orbit_ps.get_parameter(qualifier='per0')
+    dperdt = orbit_ps.get_parameter(qualifier='dperdt')
+    t0 = b.get_parameter(qualifier='t0', context='system')
 
     if solve_for in [None, t0_perpass]:
         lhs = t0_perpass
@@ -665,14 +665,14 @@ def t0_ref_supconj(b, orbit, solve_for=None, **kwargs):
     orbit_ps = _get_system_ps(b, orbit)
 
     # by default both t0s exist in an orbit, so we don't have to worry about creating either
-    t0_ref = orbit_ps.get_parameter(qualifier='t0_ref', **_skip_filter_checks)
-    t0_supconj = orbit_ps.get_parameter(qualifier='t0_supconj', **_skip_filter_checks)
-    period = orbit_ps.get_parameter(qualifier='period', **_skip_filter_checks)
-    dpdt = orbit_ps.get_parameter(qualifier='dpdt', **_skip_filter_checks)
-    ecc = orbit_ps.get_parameter(qualifier='ecc', **_skip_filter_checks)
-    per0 = orbit_ps.get_parameter(qualifier='per0', **_skip_filter_checks)
-    dperdt = orbit_ps.get_parameter(qualifier='dperdt', **_skip_filter_checks)
-    t0 = b.get_parameter(qualifier='t0', context='system', **_skip_filter_checks)
+    t0_ref = orbit_ps.get_parameter(qualifier='t0_ref')
+    t0_supconj = orbit_ps.get_parameter(qualifier='t0_supconj')
+    period = orbit_ps.get_parameter(qualifier='period')
+    dpdt = orbit_ps.get_parameter(qualifier='dpdt')
+    ecc = orbit_ps.get_parameter(qualifier='ecc')
+    per0 = orbit_ps.get_parameter(qualifier='per0')
+    dperdt = orbit_ps.get_parameter(qualifier='dperdt')
+    t0 = b.get_parameter(qualifier='t0', context='system')
 
     if solve_for in [None, t0_ref]:
         lhs = t0_ref
@@ -729,9 +729,9 @@ def period_anom(b, orbit, solve_for=None, **kwargs):
 
     orbit_ps = _get_system_ps(b, orbit)
 
-    period_sid = orbit_ps.get_parameter(qualifier='period', **_skip_filter_checks)
-    period_anom = orbit_ps.get_parameter(qualifier='period_anom', **_skip_filter_checks)
-    dperdt = orbit_ps.get_parameter(qualifier='dperdt', **_skip_filter_checks)
+    period_sid = orbit_ps.get_parameter(qualifier='period')
+    period_anom = orbit_ps.get_parameter(qualifier='period_anom')
+    dperdt = orbit_ps.get_parameter(qualifier='dperdt')
 
     if solve_for in [None, period_anom]:
         lhs = period_anom
@@ -792,11 +792,11 @@ def mean_anom(b, orbit, solve_for=None, **kwargs):
 
     orbit_ps = _get_system_ps(b, orbit)
 
-    mean_anom = orbit_ps.get_parameter(qualifier='mean_anom', **_skip_filter_checks)
-    t0_perpass = orbit_ps.get_parameter(qualifier='t0_perpass', **_skip_filter_checks)
-    period = orbit_ps.get_parameter(qualifier='period', **_skip_filter_checks)
-    dpdt = orbit_ps.get_parameter(qualifier='dpdt', **_skip_filter_checks)
-    t0 = b.get_parameter(qualifier='t0', context='system', **_skip_filter_checks)
+    mean_anom = orbit_ps.get_parameter(qualifier='mean_anom')
+    t0_perpass = orbit_ps.get_parameter(qualifier='t0_perpass')
+    period = orbit_ps.get_parameter(qualifier='period')
+    dpdt = orbit_ps.get_parameter(qualifier='dpdt')
+    t0 = b.get_parameter(qualifier='t0', context='system')
 
     if solve_for in [None, mean_anom]:
         lhs = mean_anom
@@ -840,10 +840,10 @@ def ph_supconj(b, orbit, solve_for=None, **kwargs):
     # t0_ph0 and phshift both exist by default, so we don't have to worry about creating either
     # t0_ph0 = orbit_ps.get_parameter(qualifier='t0_ph0')
     # phshift = orbit_ps.get_parameter(qualifier='phshift')
-    ph_supconj = orbit_ps.get_parameter(qualifier='ph_supconj', **_skip_filter_checks)
-    per0 = orbit_ps.get_parameter(qualifier='per0', **_skip_filter_checks)
-    ecc = orbit_ps.get_parameter(qualifier='ecc', **_skip_filter_checks)
-    period = orbit_ps.get_parameter(qualifier='period', **_skip_filter_checks)
+    ph_supconj = orbit_ps.get_parameter(qualifier='ph_supconj')
+    per0 = orbit_ps.get_parameter(qualifier='per0')
+    ecc = orbit_ps.get_parameter(qualifier='ecc')
+    period = orbit_ps.get_parameter(qualifier='period')
 
     # true_anom_supconj = pi/2 - per0
     # mean_anom_supconj = true_anom_supconj - ecc*sin(true_anom_supconj)
@@ -877,10 +877,10 @@ def ph_infconj(b, orbit, solve_for=None, **kwargs):
     """
     orbit_ps = _get_system_ps(b, orbit)
 
-    ph_infconj = orbit_ps.get_parameter(qualifier='ph_infconj', **_skip_filter_checks)
-    per0 = orbit_ps.get_parameter(qualifier='per0', **_skip_filter_checks)
-    ecc = orbit_ps.get_parameter(qualifier='ecc', **_skip_filter_checks)
-    period = orbit_ps.get_parameter(qualifier='period', **_skip_filter_checks)
+    ph_infconj = orbit_ps.get_parameter(qualifier='ph_infconj')
+    per0 = orbit_ps.get_parameter(qualifier='per0')
+    ecc = orbit_ps.get_parameter(qualifier='ecc')
+    period = orbit_ps.get_parameter(qualifier='period')
 
     if solve_for in [None, ph_infconj]:
         lhs = ph_infconj
@@ -906,10 +906,10 @@ def ph_perpass(b, orbit, solve_for=None, **kwargs):
     """
     orbit_ps = _get_system_ps(b, orbit)
 
-    ph_perpass = orbit_ps.get_parameter(qualifier='ph_perpass', **_skip_filter_checks)
-    per0 = orbit_ps.get_parameter(qualifier='per0', **_skip_filter_checks)
-    ecc = orbit_ps.get_parameter(qualifier='ecc', **_skip_filter_checks)
-    period = orbit_ps.get_parameter(qualifier='period', **_skip_filter_checks)
+    ph_perpass = orbit_ps.get_parameter(qualifier='ph_perpass')
+    per0 = orbit_ps.get_parameter(qualifier='per0')
+    ecc = orbit_ps.get_parameter(qualifier='ecc')
+    period = orbit_ps.get_parameter(qualifier='period')
 
     if solve_for in [None, ph_perpass]:
         lhs = ph_perpass
@@ -972,8 +972,8 @@ def freq(b, component, context='component', solve_for=None, **kwargs):
     #metawargs = component_ps.meta
     #metawargs.pop('qualifier')
 
-    period = component_ps.get_parameter(qualifier='period', **_skip_filter_checks)
-    freq = component_ps.get_parameter(qualifier='freq', **_skip_filter_checks)
+    period = component_ps.get_parameter(qualifier='period')
+    freq = component_ps.get_parameter(qualifier='freq')
 
     if solve_for in [None, freq]:
         lhs = freq
@@ -1029,8 +1029,8 @@ def irrad_frac(b, component, solve_for=None, **kwargs):
 
     comp_ps = b.get_component(component=component)
 
-    irrad_frac_refl_bol = comp_ps.get_parameter(qualifier='irrad_frac_refl_bol', **_skip_filter_checks)
-    irrad_frac_lost_bol = comp_ps.get_parameter(qualifier='irrad_frac_lost_bol', **_skip_filter_checks)
+    irrad_frac_refl_bol = comp_ps.get_parameter(qualifier='irrad_frac_refl_bol')
+    irrad_frac_lost_bol = comp_ps.get_parameter(qualifier='irrad_frac_lost_bol')
 
     if solve_for in [irrad_frac_lost_bol, None]:
         lhs = irrad_frac_lost_bol
@@ -1078,10 +1078,10 @@ def semidetached(b, component, solve_for=None, **kwargs):
     --------
     * NotImplementedError: if the value of `solve_for` is not implemented.
     """
-    comp_ps = b.get_component(component=component, **_skip_filter_checks)
+    comp_ps = b.get_component(component=component)
 
-    requiv = comp_ps.get_parameter(qualifier='requiv', **_skip_filter_checks)
-    requiv_critical = comp_ps.get_parameter(qualifier='requiv_max', **_skip_filter_checks)
+    requiv = comp_ps.get_parameter(qualifier='requiv')
+    requiv_critical = comp_ps.get_parameter(qualifier='requiv_max')
 
     if solve_for in [requiv, None]:
         lhs = requiv
@@ -1128,10 +1128,10 @@ def logg(b, component, solve_for=None, **kwargs):
     --------
     * NotImplementedError: if the value of `solve_for` is not implemented.
     """
-    comp_ps = b.get_component(component=component, **_skip_filter_checks)
+    comp_ps = b.get_component(component=component)
 
-    requiv = comp_ps.get_parameter(qualifier='requiv', **_skip_filter_checks)
-    mass = comp_ps.get_parameter(qualifier='mass', **_skip_filter_checks)
+    requiv = comp_ps.get_parameter(qualifier='requiv')
+    mass = comp_ps.get_parameter(qualifier='mass')
 
     metawargs = comp_ps.meta
     metawargs.pop('qualifier')
@@ -1206,14 +1206,14 @@ def teffratio(b, orbit=None, solve_for=None, **kwargs):
 
     comp1, comp2 = hier.get_stars_of_children_of(orbit)
 
-    comp1_ps = b.get_component(component=comp1, **_skip_filter_checks)
-    comp2_ps = b.get_component(component=comp2, **_skip_filter_checks)
+    comp1_ps = b.get_component(component=comp1)
+    comp2_ps = b.get_component(component=comp2)
 
     teffratio_def = FloatParameter(qualifier='teffratio',  latexfmt=r'T_\mathrm{{ eff, {children1} }} / T_\mathrm{{ eff, {children0} }}', value=1.0, default_unit=u.dimensionless_unscaled, limits=[0, None], description='ratio between effective temperatures of children stars')
     teffratio, created = b.get_or_create('teffratio', teffratio_def, kind='orbit', component=orbit, context='component')
 
-    teff1 = comp1_ps.get_parameter(qualifier='teff', **_skip_filter_checks)
-    teff2 = comp2_ps.get_parameter(qualifier='teff', **_skip_filter_checks)
+    teff1 = comp1_ps.get_parameter(qualifier='teff')
+    teff2 = comp2_ps.get_parameter(qualifier='teff')
 
     if solve_for in [teffratio, None]:
         lhs = teffratio
@@ -1276,21 +1276,21 @@ def requivratio(b, orbit=None, solve_for=None, **kwargs):
 
     comp1, comp2 = hier.get_stars_of_children_of(orbit)
 
-    orbit_ps = b.get_component(component=orbit, **_skip_filter_checks)
-    comp1_ps = b.get_component(component=comp1, **_skip_filter_checks)
-    comp2_ps = b.get_component(component=comp2, **_skip_filter_checks)
+    orbit_ps = b.get_component(component=orbit)
+    comp1_ps = b.get_component(component=comp1)
+    comp2_ps = b.get_component(component=comp2)
 
-    requiv1 = comp1_ps.get_parameter(qualifier='requiv', **_skip_filter_checks)
-    requiv2 = comp2_ps.get_parameter(qualifier='requiv', **_skip_filter_checks)
+    requiv1 = comp1_ps.get_parameter(qualifier='requiv')
+    requiv2 = comp2_ps.get_parameter(qualifier='requiv')
 
-    sma = orbit_ps.get_parameter(qualifier='sma', **_skip_filter_checks)
+    sma = orbit_ps.get_parameter(qualifier='sma')
 
     requivratio_def = FloatParameter(qualifier='requivratio', latexfmt=r'R_\mathrm{{ equiv, {children1} }} / R_\mathrm{{ equiv, {children0} }}', value=1.0, default_unit=u.dimensionless_unscaled, limits=[0, None], description='ratio between equivalent radii of children stars')
     requivratio, requivratio_created = b.get_or_create('requivratio', requivratio_def, kind='orbit', component=orbit, context='component')
 
     requivsumfrac_exists = 'requivsumfrac' in orbit_ps.qualifiers
     if requivsumfrac_exists:
-        requivsumfrac = orbit_ps.get_parameter(qualifier='requivsumfrac', **_skip_filter_checks)
+        requivsumfrac = orbit_ps.get_parameter(qualifier='requivsumfrac')
         requivsumfrac_constrained = kwargs.get('requivsumfrac_constrained', len(requivsumfrac.constrained_by) > 0)
         params = [requivratio, requivsumfrac, requiv1, requiv2, sma]
 
@@ -1389,20 +1389,20 @@ def requivsumfrac(b, orbit=None, solve_for=None, **kwargs):
 
     comp1, comp2 = hier.get_stars_of_children_of(orbit)
 
-    orbit_ps = b.get_component(component=orbit, **_skip_filter_checks)
-    comp1_ps = b.get_component(component=comp1, **_skip_filter_checks)
-    comp2_ps = b.get_component(component=comp2, **_skip_filter_checks)
+    orbit_ps = b.get_component(component=orbit)
+    comp1_ps = b.get_component(component=comp1)
+    comp2_ps = b.get_component(component=comp2)
 
-    requiv1 = comp1_ps.get_parameter(qualifier='requiv', **_skip_filter_checks)
-    requiv2 = comp2_ps.get_parameter(qualifier='requiv', **_skip_filter_checks)
-    sma = orbit_ps.get_parameter(qualifier='sma', **_skip_filter_checks)
+    requiv1 = comp1_ps.get_parameter(qualifier='requiv')
+    requiv2 = comp2_ps.get_parameter(qualifier='requiv')
+    sma = orbit_ps.get_parameter(qualifier='sma')
 
     requivsumfrac_def = FloatParameter(qualifier='requivsumfrac', latexfmt=r'(R_\mathrm{{ equiv, {children0} }} + R_\mathrm{{ equiv, {children1} }}) / a_\mathrm{{ {component} }}', value=1.0, default_unit=u.dimensionless_unscaled, limits=[0, None], description='sum of fractional equivalent radii of children stars')
     requivsumfrac, requivsumfrac_created = b.get_or_create('requivsumfrac', requivsumfrac_def, kind='orbit', component=orbit, context='component')
 
     requivratio_exists = 'requivratio' in orbit_ps.qualifiers
     if requivratio_exists:
-        requivratio = orbit_ps.get_parameter(qualifier='requivratio', **_skip_filter_checks)
+        requivratio = orbit_ps.get_parameter(qualifier='requivratio')
         requivratio_constrained = kwargs.get('requivratio_constrained', len(requivratio.constrained_by) > 0)
         params = [requivratio, requivsumfrac, requiv1, requiv2, sma]
 
@@ -1516,14 +1516,14 @@ def mass(b, component, solve_for=None, **kwargs):
     parentorbit = hier.get_parent_of(component)
     parentorbit_ps = _get_system_ps(b, parentorbit)
 
-    mass = component_ps.get_parameter(qualifier='mass', **_skip_filter_checks)
-    mass_sibling = sibling_ps.get_parameter(qualifier='mass', **_skip_filter_checks)
+    mass = component_ps.get_parameter(qualifier='mass')
+    mass_sibling = sibling_ps.get_parameter(qualifier='mass')
 
     # we need to find the constraint attached to the other component... but we
     # don't know who is constrained, or whether it belongs to the sibling or parent
     # orbit, so we'll have to do a bit of digging.
     mass_constraint_sibling = None
-    for p in b.filter(constraint_func='mass', component=[parentorbit, sibling], context='constraint', **_skip_filter_checks).to_list():
+    for p in b.filter(constraint_func='mass', component=[parentorbit, sibling], context='constraint').to_list():
         if p.constraint_kwargs['component'] == sibling:
             mass_constraint_sibling = p
             break
@@ -1534,10 +1534,10 @@ def mass(b, component, solve_for=None, **kwargs):
         # this could happen when we build the first constraint, before the second has been built
         sibling_solve_for = None
 
-    sma = parentorbit_ps.get_parameter(qualifier='sma', **_skip_filter_checks)
+    sma = parentorbit_ps.get_parameter(qualifier='sma')
     # NOTE: sidereal period
-    period = parentorbit_ps.get_parameter(qualifier='period', **_skip_filter_checks)
-    q = parentorbit_ps.get_parameter(qualifier='q', **_skip_filter_checks)
+    period = parentorbit_ps.get_parameter(qualifier='period')
+    q = parentorbit_ps.get_parameter(qualifier='q')
 
     G = c.G.to('solRad3 / (solMass d2)')
     G.keep_in_solar_units = True
@@ -1683,8 +1683,8 @@ def comp_sma(b, component, solve_for=None, **kwargs):
     compsma_def = FloatParameter(qualifier='sma', latexfmt=r'a_\mathrm{{ {component} }}', value=4.0, default_unit=u.solRad, advanced=True, description='Semi major axis of the component in the orbit')
     compsma, created = b.get_or_create('sma', compsma_def, **metawargs)
 
-    sma = parentorbit_ps.get_parameter(qualifier='sma', **_skip_filter_checks)
-    q = parentorbit_ps.get_parameter(qualifier='q', **_skip_filter_checks)
+    sma = parentorbit_ps.get_parameter(qualifier='sma')
+    q = parentorbit_ps.get_parameter(qualifier='q')
 
     # NOTE: similar logic is also in dynamics.keplerian.dynamics_from_bundle to
     # handle nested hierarchical orbits.  If changing any of the logic here,
@@ -1771,9 +1771,9 @@ def comp_asini(b, component, solve_for=None, **kwargs):
     compasini_def = FloatParameter(qualifier='asini', latexfmt=r'a_\mathrm{{ {component} }} \sin i_\mathrm{{ {parent} }}',  value=4.0, default_unit=u.solRad, advanced=True, description='Projected semi major axis of the component in the orbit')
     compasini, created = b.get_or_create('asini', compasini_def, **metawargs)
 
-    sma = parentorbit_ps.get_parameter(qualifier='sma', **_skip_filter_checks)
-    q = parentorbit_ps.get_parameter(qualifier='q', **_skip_filter_checks)
-    incl = parentorbit_ps.get_parameter(qualifier='incl', **_skip_filter_checks)
+    sma = parentorbit_ps.get_parameter(qualifier='sma')
+    q = parentorbit_ps.get_parameter(qualifier='q')
+    incl = parentorbit_ps.get_parameter(qualifier='incl')
 
     # NOTE: similar logic is also in dynamics.keplerian.dynamics_from_bundle to
     # handle nested hierarchical orbits.  If changing any of the logic here,
@@ -1854,8 +1854,8 @@ def requivfrac(b, component, solve_for=None, **kwargs):
     requivfrac_def = FloatParameter(qualifier='requivfrac', latexfmt=r'R_\mathrm{{ {component} }} / a_\mathrm{{ {parent} }}', value=1.0, default_unit=u.dimensionless_unscaled, advanced=True, description='Fractional equivalent radius')
     requivfrac, created = b.get_or_create('requivfrac', requivfrac_def, **metawargs)
 
-    requiv = component_ps.get_parameter(qualifier='requiv', **_skip_filter_checks)
-    sma = parentorbit_ps.get_parameter(qualifier='sma', **_skip_filter_checks)
+    requiv = component_ps.get_parameter(qualifier='requiv')
+    sma = parentorbit_ps.get_parameter(qualifier='sma')
 
     if solve_for in [None, requivfrac]:
         lhs = requivfrac
@@ -1926,15 +1926,15 @@ def requiv_detached_max(b, component, solve_for=None, **kwargs):
 
     parentorbit_ps = _get_system_ps(b, parentorbit)
 
-    requiv_max = component_ps.get_parameter(qualifier='requiv_max', **_skip_filter_checks)
-    q = parentorbit_ps.get_parameter(qualifier='q', **_skip_filter_checks)
-    syncpar = component_ps.get_parameter(qualifier='syncpar', **_skip_filter_checks)
-    ecc = parentorbit_ps.get_parameter(qualifier='ecc', **_skip_filter_checks)
-    sma = parentorbit_ps.get_parameter(qualifier='sma', **_skip_filter_checks)
-    incl_star = component_ps.get_parameter(qualifier='incl', **_skip_filter_checks)
-    long_an_star = component_ps.get_parameter(qualifier='long_an', **_skip_filter_checks)
-    incl_orbit = parentorbit_ps.get_parameter(qualifier='incl', **_skip_filter_checks)
-    long_an_orbit = parentorbit_ps.get_parameter(qualifier='long_an', **_skip_filter_checks)
+    requiv_max = component_ps.get_parameter(qualifier='requiv_max')
+    q = parentorbit_ps.get_parameter(qualifier='q')
+    syncpar = component_ps.get_parameter(qualifier='syncpar')
+    ecc = parentorbit_ps.get_parameter(qualifier='ecc')
+    sma = parentorbit_ps.get_parameter(qualifier='sma')
+    incl_star = component_ps.get_parameter(qualifier='incl')
+    long_an_star = component_ps.get_parameter(qualifier='long_an')
+    incl_orbit = parentorbit_ps.get_parameter(qualifier='incl')
+    long_an_orbit = parentorbit_ps.get_parameter(qualifier='long_an')
 
     if solve_for in [None, requiv_max]:
         lhs = requiv_max
@@ -1996,9 +1996,9 @@ def requiv_single_max(b, component, solve_for=None, **kwargs):
     if parentorbit is not None:
         raise ValueError("cannot constrain requiv_single_max unless hierarchy is for a single star")
 
-    requiv_max = component_ps.get_parameter(qualifier='requiv_max', **_skip_filter_checks)
-    period = component_ps.get_parameter(qualifier='period', **_skip_filter_checks)
-    mass = component_ps.get_parameter(qualifier='mass', **_skip_filter_checks)
+    requiv_max = component_ps.get_parameter(qualifier='requiv_max')
+    period = component_ps.get_parameter(qualifier='period')
+    mass = component_ps.get_parameter(qualifier='mass')
     G = c.G.to('solRad3/(solMass d2)').value
 
     if solve_for in [None, requiv_max]:
@@ -2074,8 +2074,8 @@ def potential_contact_min(b, component, solve_for=None, **kwargs):
     parentorbit = hier.get_parent_of(component)
     parentorbit_ps = _get_system_ps(b, parentorbit)
 
-    pot_min = component_ps.get_parameter(qualifier='pot_min', **_skip_filter_checks)
-    q = parentorbit_ps.get_parameter(qualifier='q', **_skip_filter_checks)
+    pot_min = component_ps.get_parameter(qualifier='pot_min')
+    q = parentorbit_ps.get_parameter(qualifier='q')
 
     if solve_for in [None, pot_min]:
         lhs = pot_min
@@ -2133,8 +2133,8 @@ def potential_contact_max(b, component, solve_for=None, **kwargs):
     parentorbit = hier.get_parent_of(component)
     parentorbit_ps = _get_system_ps(b, parentorbit)
 
-    pot_max = component_ps.get_parameter(qualifier='pot_max', **_skip_filter_checks)
-    q = parentorbit_ps.get_parameter(qualifier='q', **_skip_filter_checks)
+    pot_max = component_ps.get_parameter(qualifier='pot_max')
+    q = parentorbit_ps.get_parameter(qualifier='q')
 
     if solve_for in [None, pot_max]:
         lhs = pot_max
@@ -2192,9 +2192,9 @@ def requiv_contact_min(b, component, solve_for=None, **kwargs):
     parentorbit = hier.get_parent_of(component)
     parentorbit_ps = _get_system_ps(b, parentorbit)
 
-    requiv_min = component_ps.get_parameter(qualifier='requiv_min', **_skip_filter_checks)
-    q = parentorbit_ps.get_parameter(qualifier='q', **_skip_filter_checks)
-    sma = parentorbit_ps.get_parameter(qualifier='sma', **_skip_filter_checks)
+    requiv_min = component_ps.get_parameter(qualifier='requiv_min')
+    q = parentorbit_ps.get_parameter(qualifier='q')
+    sma = parentorbit_ps.get_parameter(qualifier='sma')
 
     if solve_for in [None, requiv_min]:
         lhs = requiv_min
@@ -2252,9 +2252,9 @@ def requiv_contact_max(b, component, solve_for=None, **kwargs):
     parentorbit = hier.get_parent_of(component)
     parentorbit_ps = _get_system_ps(b, parentorbit)
 
-    requiv_max = component_ps.get_parameter(qualifier='requiv_max', **_skip_filter_checks)
-    q = parentorbit_ps.get_parameter(qualifier='q', **_skip_filter_checks)
-    sma = parentorbit_ps.get_parameter(qualifier='sma', **_skip_filter_checks)
+    requiv_max = component_ps.get_parameter(qualifier='requiv_max')
+    q = parentorbit_ps.get_parameter(qualifier='q')
+    sma = parentorbit_ps.get_parameter(qualifier='sma')
 
     if solve_for in [None, requiv_max]:
         lhs = requiv_max
@@ -2310,9 +2310,9 @@ def fillout_factor(b, component, solve_for=None, **kwargs):
     parentorbit = hier.get_parent_of(component)
     parentorbit_ps = _get_system_ps(b, parentorbit)
 
-    pot = component_ps.get_parameter(qualifier='pot', **_skip_filter_checks)
-    fillout_factor = component_ps.get_parameter(qualifier='fillout_factor', **_skip_filter_checks)
-    q = parentorbit_ps.get_parameter(qualifier='q', **_skip_filter_checks)
+    pot = component_ps.get_parameter(qualifier='pot')
+    fillout_factor = component_ps.get_parameter(qualifier='fillout_factor')
+    q = parentorbit_ps.get_parameter(qualifier='q')
 
     if solve_for in [None, fillout_factor]:
         lhs = fillout_factor
@@ -2372,11 +2372,11 @@ def rotation_period(b, component, solve_for=None, **kwargs):
     parentorbit = hier.get_parent_of(component)
     parentorbit_ps = _get_system_ps(b, parentorbit)
 
-    period_star = component_ps.get_parameter(qualifier='period', **_skip_filter_checks)
-    syncpar_star = component_ps.get_parameter(qualifier='syncpar', **_skip_filter_checks)
+    period_star = component_ps.get_parameter(qualifier='period')
+    syncpar_star = component_ps.get_parameter(qualifier='syncpar')
 
     # NOTE: sidereal period
-    period_orbit = parentorbit_ps.get_parameter(qualifier='period', **_skip_filter_checks)
+    period_orbit = parentorbit_ps.get_parameter(qualifier='period')
 
     if solve_for in [None, period_star]:
         lhs = period_star
@@ -2440,9 +2440,9 @@ def pitch(b, component, solve_for=None, **kwargs):
     parentorbit = hier.get_parent_of(component)
     parentorbit_ps = _get_system_ps(b, parentorbit)
 
-    incl_comp = component_ps.get_parameter(qualifier='incl', **_skip_filter_checks)
-    pitch_comp = component_ps.get_parameter(qualifier='pitch', **_skip_filter_checks)
-    incl_orb = parentorbit_ps.get_parameter(qualifier='incl', **_skip_filter_checks)
+    incl_comp = component_ps.get_parameter(qualifier='incl')
+    pitch_comp = component_ps.get_parameter(qualifier='pitch')
+    incl_orb = parentorbit_ps.get_parameter(qualifier='incl')
 
     if solve_for in [None, incl_comp]:
         lhs = incl_comp
@@ -2506,9 +2506,9 @@ def yaw(b, component, solve_for=None, **kwargs):
     parentorbit = hier.get_parent_of(component)
     parentorbit_ps = _get_system_ps(b, parentorbit)
 
-    long_an_comp = component_ps.get_parameter(qualifier='long_an', **_skip_filter_checks)
-    yaw_comp = component_ps.get_parameter(qualifier='yaw', **_skip_filter_checks)
-    long_an_orb = parentorbit_ps.get_parameter(qualifier='long_an', **_skip_filter_checks)
+    long_an_comp = component_ps.get_parameter(qualifier='long_an')
+    yaw_comp = component_ps.get_parameter(qualifier='yaw')
+    long_an_orb = parentorbit_ps.get_parameter(qualifier='long_an')
 
     if solve_for in [None, long_an_comp]:
         lhs = long_an_comp
@@ -2579,13 +2579,13 @@ def compute_phases(b, component, dataset, solve_for=None, **kwargs):
     * NotImplementedError: if the value of `solve_for` is not implemented.
     """
     ds = b.get_dataset(dataset, check_default=False, check_visible=False)
-    compute_times = ds.get_parameter(qualifier='compute_times', **_skip_filter_checks)
-    compute_phases = ds.get_parameter(qualifier='compute_phases', component=component, **_skip_filter_checks)
-    period = b.get_parameter(qualifier='period', component=component if component!='_default' else b.hierarchy.get_top(), context='component', **_skip_filter_checks)
+    compute_times = ds.get_parameter(qualifier='compute_times')
+    compute_phases = ds.get_parameter(qualifier='compute_phases', component=component)
+    period = b.get_parameter(qualifier='period', component=component if component!='_default' else b.hierarchy.get_top(), context='component')
 
     if len(b.hierarchy.get_stars()) == 1:
         # then for the single star case we always use t0@system and have no dpdt
-        t0_system = b.get_parameter(qualifier='t0', context='system', **_skip_filter_checks)
+        t0_system = b.get_parameter(qualifier='t0', context='system')
 
         if solve_for in [None, compute_phases]:
             lhs = compute_phases
@@ -2599,22 +2599,22 @@ def compute_phases(b, component, dataset, solve_for=None, **kwargs):
 
     else:
         try:
-            period_anom = b.get_parameter(qualifier='period_anom', component=component if component!='_default' else b.hierarchy.get_top(), context='component', **_skip_filter_checks)
+            period_anom = b.get_parameter(qualifier='period_anom', component=component if component!='_default' else b.hierarchy.get_top(), context='component')
         except ValueError:
             # we need to handle the backward compatibility case where period_anom does not yet exit (probably calling this DURING migration)
             if 'period_anom' not in b.qualifiers:
                 logger.warning("compute_phases constraint falling back on period (sidereal)")
-                period_anom = b.get_parameter(qualifier='period', component=component if component!='_default' else b.hierarchy.get_top(), context='component', **_skip_filter_checks)
+                period_anom = b.get_parameter(qualifier='period', component=component if component!='_default' else b.hierarchy.get_top(), context='component')
             else:
                 raise
 
-        phases_period = ds.get_parameter(qualifier='phases_period', component=component, **_skip_filter_checks)
-        phases_dpdt = ds.get_parameter(qualifier='phases_dpdt', component=component, **_skip_filter_checks)
-        phases_t0 = ds.get_parameter(qualifier='phases_t0', component=component, **_skip_filter_checks)
-        t0_supconj = b.get_parameter(qualifier='t0_supconj', component=component if component!='_default' else b.hierarchy.get_top(), context='component', **_skip_filter_checks)
-        t0_perpass = b.get_parameter(qualifier='t0_perpass', component=component if component!='_default' else b.hierarchy.get_top(), context='component', **_skip_filter_checks)
-        t0_ref = b.get_parameter(qualifier='t0_ref', component=component if component!='_default' else b.hierarchy.get_top(), context='component', **_skip_filter_checks)
-        dpdt = b.get_parameter(qualifier='dpdt', component=component if component!='_default' else b.hierarchy.get_top(), context='component', **_skip_filter_checks)
+        phases_period = ds.get_parameter(qualifier='phases_period', component=component)
+        phases_dpdt = ds.get_parameter(qualifier='phases_dpdt', component=component)
+        phases_t0 = ds.get_parameter(qualifier='phases_t0', component=component)
+        t0_supconj = b.get_parameter(qualifier='t0_supconj', component=component if component!='_default' else b.hierarchy.get_top(), context='component')
+        t0_perpass = b.get_parameter(qualifier='t0_perpass', component=component if component!='_default' else b.hierarchy.get_top(), context='component')
+        t0_ref = b.get_parameter(qualifier='t0_ref', component=component if component!='_default' else b.hierarchy.get_top(), context='component')
+        dpdt = b.get_parameter(qualifier='dpdt', component=component if component!='_default' else b.hierarchy.get_top(), context='component')
 
         if solve_for in [None, compute_phases]:
             lhs = compute_phases
@@ -2660,10 +2660,10 @@ def extinction(b, solve_for=None, **kwargs):
     """
 
     # Rv =Av/ebv
-    system_ps = b.filter(context='system', **_skip_filter_checks)
-    ebv = system_ps.get_parameter(qualifier='ebv', **_skip_filter_checks)
-    Av = system_ps.get_parameter(qualifier='Av', **_skip_filter_checks)
-    Rv = system_ps.get_parameter(qualifier='Rv', **_skip_filter_checks)
+    system_ps = b.filter(context='system')
+    ebv = system_ps.get_parameter(qualifier='ebv')
+    Av = system_ps.get_parameter(qualifier='Av')
+    Rv = system_ps.get_parameter(qualifier='Rv')
 
 
     if solve_for in [None, ebv]:
@@ -2710,8 +2710,8 @@ def parallax(b, solve_for=None, **kwargs):
     """
 
     # Rv =Av/ebv
-    system_ps = b.filter(context='system', **_skip_filter_checks)
-    distance = system_ps.get_parameter(qualifier='distance', **_skip_filter_checks)
+    system_ps = b.filter(context='system')
+    distance = system_ps.get_parameter(qualifier='distance')
 
     parallax_def = FloatParameter(qualifier='parallax', latexfmt=r'\pi', value=1.0, default_unit=u.arcsec, description='Parallax')
 
@@ -2777,12 +2777,12 @@ def requiv_to_pot(b, component, solve_for=None, **kwargs):
         component_ps = _get_system_ps(b, component)
         envelope_ps = _get_system_ps(b, hier.get_envelope_of(component))
 
-    q = parentorbit_ps.get_parameter(qualifier='q', **_skip_filter_checks)
-    sma = parentorbit_ps.get_parameter(qualifier='sma', **_skip_filter_checks)
+    q = parentorbit_ps.get_parameter(qualifier='q')
+    sma = parentorbit_ps.get_parameter(qualifier='sma')
 
     # assuming component is always primary or secondary and never envelope
-    pot = envelope_ps.get_parameter(qualifier='pot', **_skip_filter_checks)
-    requiv = component_ps.get_parameter(qualifier='requiv', **_skip_filter_checks)
+    pot = envelope_ps.get_parameter(qualifier='pot')
+    requiv = component_ps.get_parameter(qualifier='requiv')
 
     compno = hier.get_primary_or_secondary(component, return_ind=True)
 
@@ -2856,17 +2856,17 @@ def impact_param(b, orbit=None, solve_for=None, **kwargs):
     # And now call get_or_create on the bundle
     impactparam, impactparam_created = b.get_or_create('impact_param', impactparam_def, **metawargs)
     comp1, comp2 = hier.get_stars_of_children_of(orbit)
-    comp1_ps = b.get_component(component=comp1, **_skip_filter_checks)
-    comp2_ps = b.get_component(component=comp2, **_skip_filter_checks)
+    comp1_ps = b.get_component(component=comp1)
+    comp2_ps = b.get_component(component=comp2)
 
-    requiv1 = comp1_ps.get_parameter(qualifier='requiv', **_skip_filter_checks)
-    requiv2 = comp2_ps.get_parameter(qualifier='requiv', **_skip_filter_checks)
-    sma = orbit_ps.get_parameter(qualifier='sma', **_skip_filter_checks)
+    requiv1 = comp1_ps.get_parameter(qualifier='requiv')
+    requiv2 = comp2_ps.get_parameter(qualifier='requiv')
+    sma = orbit_ps.get_parameter(qualifier='sma')
     requivsumfrac = (requiv1 + requiv2)/sma
 
-    incl = orbit_ps.get_parameter(qualifier='incl', **_skip_filter_checks)
-    esinw = orbit_ps.get_parameter(qualifier='esinw', **_skip_filter_checks)
-    ecosw = orbit_ps.get_parameter(qualifier='ecosw', **_skip_filter_checks)
+    incl = orbit_ps.get_parameter(qualifier='incl')
+    esinw = orbit_ps.get_parameter(qualifier='esinw')
+    ecosw = orbit_ps.get_parameter(qualifier='ecosw')
 
 
     if solve_for in [None, impactparam]:

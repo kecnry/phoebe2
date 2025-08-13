@@ -12,8 +12,6 @@ logger.addHandler(logging.NullHandler())
 
 __all__ = ['ComponentFeature', 'Spot', 'Pulsation']
 
-_skip_filter_checks = {'check_default': False, 'check_visible': False}
-
 
 class ComponentFeature(BaseFeature):
     """
@@ -162,29 +160,29 @@ class Spot(ComponentFeature):
         Initialize a Spot feature from the bundle.
         """
         import numpy as np
-        colat = feature_ps.get_value(qualifier='colat', unit=u.rad, **_skip_filter_checks)
-        longitude = feature_ps.get_value(qualifier='long', unit=u.rad, **_skip_filter_checks)
+        colat = feature_ps.get_value(qualifier='colat', unit=u.rad)
+        longitude = feature_ps.get_value(qualifier='long', unit=u.rad)
 
         if len(b.hierarchy.get_stars())>=2:
-            star_ps = b.get_component(component=feature_ps.component, **_skip_filter_checks)
-            orbit_ps = b.get_component(component=b.hierarchy.get_parent_of(feature_ps.component), **_skip_filter_checks)
+            star_ps = b.get_component(component=feature_ps.component)
+            orbit_ps = b.get_component(component=b.hierarchy.get_parent_of(feature_ps.component))
             # TODO: how should this handle dpdt?
 
             # we won't use syncpar directly because that is defined wrt sidereal period and we want to make sure
             # this translated to roche longitude correctly.  In the non-apsidal motion case
             # syncpar = period_anom_orb / period_star
-            period_anom_orb = orbit_ps.get_value(qualifier='period_anom', unit=u.d, **_skip_filter_checks)
-            period_star = star_ps.get_value(qualifier='period', unit=u.d, **_skip_filter_checks)
+            period_anom_orb = orbit_ps.get_value(qualifier='period_anom', unit=u.d)
+            period_star = star_ps.get_value(qualifier='period', unit=u.d)
             rot_dlongdt = 2 * np.pi * (period_anom_orb/period_star - 1) / period_anom_orb
         else:
-            star_ps = b.get_component(component=feature_ps.component, **_skip_filter_checks)
-            rot_dlongdt = star_ps.get_value(qualifier='freq', unit=u.rad/u.d, **_skip_filter_checks)
+            star_ps = b.get_component(component=feature_ps.component)
+            rot_dlongdt = star_ps.get_value(qualifier='freq', unit=u.rad/u.d)
             longitude += np.pi/2
 
-        radius = feature_ps.get_value(qualifier='radius', unit=u.rad, **_skip_filter_checks)
-        relteff = feature_ps.get_value(qualifier='relteff', unit=u.dimensionless_unscaled, **_skip_filter_checks)
+        radius = feature_ps.get_value(qualifier='radius', unit=u.rad)
+        relteff = feature_ps.get_value(qualifier='relteff', unit=u.dimensionless_unscaled)
 
-        t0 = b.get_value(qualifier='t0', context='system', unit=u.d, **_skip_filter_checks)
+        t0 = b.get_value(qualifier='t0', context='system', unit=u.d)
 
         return dict(colat=colat, longitude=longitude, rot_dlongdt=rot_dlongdt, radius=radius, relteff=relteff, t0=t0)
 
@@ -272,14 +270,14 @@ class Pulsation(ComponentFeature):
         """
         Initialize a Pulsation feature from the bundle.
         """
-        freq = feature_ps.get_value(qualifier='freq', unit=u.d**-1, **_skip_filter_checks)
-        radamp = feature_ps.get_value(qualifier='radamp', unit=u.dimensionless_unscaled, **_skip_filter_checks)
-        l = feature_ps.get_value(qualifier='l', unit=u.dimensionless_unscaled, **_skip_filter_checks)
-        m = feature_ps.get_value(qualifier='m', unit=u.dimensionless_unscaled, **_skip_filter_checks)
-        teffext = feature_ps.get_value(qualifier='teffext', **_skip_filter_checks)
+        freq = feature_ps.get_value(qualifier='freq', unit=u.d**-1)
+        radamp = feature_ps.get_value(qualifier='radamp', unit=u.dimensionless_unscaled)
+        l = feature_ps.get_value(qualifier='l', unit=u.dimensionless_unscaled)
+        m = feature_ps.get_value(qualifier='m', unit=u.dimensionless_unscaled)
+        teffext = feature_ps.get_value(qualifier='teffext')
 
-        GM = c.G.to('solRad3 / (solMass d2)').value*b.get_value(qualifier='mass', component=feature_ps.component, context='component', unit=u.solMass, **_skip_filter_checks)
-        R = b.get_value(qualifier='rpole', component=feature_ps.component, section='component', unit=u.solRad, **_skip_filter_checks)
+        GM = c.G.to('solRad3 / (solMass d2)').value*b.get_value(qualifier='mass', component=feature_ps.component, context='component', unit=u.solMass)
+        R = b.get_value(qualifier='rpole', component=feature_ps.component, section='component', unit=u.solRad)
 
         tanamp = GM/R**3/freq**2
 

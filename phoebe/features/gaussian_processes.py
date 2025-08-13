@@ -19,33 +19,32 @@ else:
 
 __all__ = ['handle_gaussian_processes']
 
-_skip_filter_checks = {'check_default': False, 'check_visible': False}
 
 def handle_gaussian_processes(b, model, model_ps, enabled_features, computeparams):
 
     for ds in model_ps.datasets:
-        gp_sklearn_features = b.filter(feature=enabled_features, dataset=ds, kind='gp_sklearn', **_skip_filter_checks).features
-        gp_celerite2_features = b.filter(feature=enabled_features, dataset=ds, kind='gp_celerite2', **_skip_filter_checks).features
+        gp_sklearn_features = b.filter(feature=enabled_features, dataset=ds, kind='gp_sklearn').features
+        gp_celerite2_features = b.filter(feature=enabled_features, dataset=ds, kind='gp_celerite2').features
 
         if len(gp_sklearn_features)!=0 or len(gp_celerite2_features)!=0:
             # we'll loop over components (for RVs or LPs, for example)
             # get the data we need to fit the GP model
-            ds_ps = b.get_dataset(dataset=ds, **_skip_filter_checks)
+            ds_ps = b.get_dataset(dataset=ds)
             xqualifier = {'lp': 'wavelength'}.get(ds_ps.kind, 'times')
             yqualifier = {'lp': 'flux_densities', 'rv': 'rvs', 'lc': 'fluxes'}.get(ds_ps.kind)
             yerrqualifier = {'lp': 'wavelength'}.get(ds_ps.kind, 'sigmas')
 
-            _exclude_phases_enabled = computeparams.get_value(qualifier='gp_exclude_phases_enabled', dataset=ds, **_skip_filter_checks)
+            _exclude_phases_enabled = computeparams.get_value(qualifier='gp_exclude_phases_enabled', dataset=ds)
 
             if ds_ps.kind in ['lc']:
                 ds_comps = [None]
             else:
                 ds_comps = ds_ps.filter(qualifier=xqualifier, check_visible=True).components
             for ds_comp in ds_comps:
-                ds_x = ds_ps.get_value(qualifier=xqualifier, component=ds_comp, **_skip_filter_checks)
-                model_x = model_ps.get_value(qualifier=xqualifier, dataset=ds, component=ds_comp, **_skip_filter_checks)
-                ds_sigmas = ds_ps.get_value(qualifier=yerrqualifier, component=ds_comp, **_skip_filter_checks)
-                # ds_sigmas = ds_ps.get_value(qualifier='sigmas', component=ds_comp, **_skip_filter_checks)
+                ds_x = ds_ps.get_value(qualifier=xqualifier, component=ds_comp)
+                model_x = model_ps.get_value(qualifier=xqualifier, dataset=ds, component=ds_comp)
+                ds_sigmas = ds_ps.get_value(qualifier=yerrqualifier, component=ds_comp)
+                # ds_sigmas = ds_ps.get_value(qualifier='sigmas', component=ds_comp)
                 # TODO: do we need to inflate sigmas by lnf?
                 if not len(ds_x):
                     # should have been caught by run_checks_compute
@@ -57,7 +56,7 @@ def handle_gaussian_processes(b, model, model_ps, enabled_features, computeparam
                                             return_interp_model=True,
                                             as_quantity=False,
                                             consider_gaussian_process=False)
-            model_y = model_ps.get_quantity(qualifier=yqualifier, dataset=ds, component=ds_comp, **_skip_filter_checks)
+            model_y = model_ps.get_quantity(qualifier=yqualifier, dataset=ds, component=ds_comp)
 
             gp_kernels = []
             alg_operations = []
@@ -65,13 +64,13 @@ def handle_gaussian_processes(b, model, model_ps, enabled_features, computeparam
             def _load_gps(gp_kernel_classes, gp_features, ds):
 
                 for gp in gp_features:
-                    gp_ps = b.filter(feature=gp, context='feature', **_skip_filter_checks)
-                    kind = gp_ps.get_value(qualifier='kernel', **_skip_filter_checks)
+                    gp_ps = b.filter(feature=gp, context='feature')
+                    kind = gp_ps.get_value(qualifier='kernel')
 
                     kwargs = {p.qualifier: p.value for p in gp_ps.exclude(qualifier=['kernel', 'enabled']).to_list() if p.is_visible}
                     # TODO: replace this with getting the parameter from compute options
                     if _exclude_phases_enabled:
-                        exclude_phase_ranges = computeparams.get_value(qualifier='gp_exclude_phases', dataset=ds, **_skip_filter_checks)
+                        exclude_phase_ranges = computeparams.get_value(qualifier='gp_exclude_phases', dataset=ds)
                     else:
                         exclude_phase_ranges = []
 
@@ -155,10 +154,10 @@ def handle_gaussian_processes(b, model, model_ps, enabled_features, computeparam
             y_nogp_param = FloatArrayParameter(qualifier='{}_nogps'.format(yqualifier), value=model_y_dstimes, default_unit=model_y.unit, readonly=True, description='{} before adding gps'.format(yqualifier))
             if len(ds_x) != len(model_x) or not np.all(ds_x == model_x):
                 logger.warning("model for dataset='{}' resampled at dataset times when adding GPs".format(ds))
-                model_ps.set_value(qualifier=xqualifier, dataset=ds, component=ds_comp, value=ds_x, ignore_readonly=True, **_skip_filter_checks)
+                model_ps.set_value(qualifier=xqualifier, dataset=ds, component=ds_comp, value=ds_x, ignore_readonly=True)
 
             b._attach_params([gp_param, y_nogp_param], dataset=ds, check_copy_for=False, **metawargs)
 
             # update the model to include the GP contribution
-            model_ps.set_value(qualifier=yqualifier, value=model_y_dstimes+gp_y, dataset=ds, component=ds_comp, ignore_readonly=True, **_skip_filter_checks)
+            model_ps.set_value(qualifier=yqualifier, value=model_y_dstimes+gp_y, dataset=ds, component=ds_comp, ignore_readonly=True)
 

@@ -11,10 +11,6 @@ class BaseFeature:
 
     @classmethod
     def parse_from_feature_ps(cls, b, feature_ps, param_list):
-        _skip_filter_checks = {'check_default': False,
-                               'check_visible': False,
-                               'check_advanced': False}
-
         def item_to_kwargs(item):
             if isinstance(item, str):
                 item = {'qualifier': item}
@@ -23,7 +19,9 @@ class BaseFeature:
             return item
 
         kws = [item_to_kwargs(item) for item in param_list]
-        return {kw['qualifier']: feature_ps.get_value(**kw, **_skip_filter_checks) for kw in kws}
+        with feature_ps.skip_filter_checks():
+            d = {kw['qualifier']: feature_ps.get_value(**kw) for kw in kws}
+        return d
 
     @classmethod
     def parse_bundle(cls, b, feature_ps):

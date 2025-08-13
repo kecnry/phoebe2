@@ -11,8 +11,6 @@ import logging
 logger = logging.getLogger("DYNAMICS.KEPLERIAN")
 logger.addHandler(logging.NullHandler())
 
-_skip_filter_checks = {'check_default': False, 'check_visible': False}
-
 def dynamics_from_bundle(b, times, compute=None, return_euler=False, **kwargs):
     """
     Parse parameters in the bundle and call :func:`dynamics`.
@@ -41,22 +39,22 @@ def dynamics_from_bundle(b, times, compute=None, return_euler=False, **kwargs):
 
     b.run_delayed_constraints()
 
-    computeps = b.get_compute(compute=compute, force_ps=True, **_skip_filter_checks)
+    computeps = b.get_compute(compute=compute, force_ps=True)
     if len(computeps.computes) == 1:
-        ltte = computeps.get_value(qualifier='ltte', ltte=kwargs.get('ltte', None), default=False, **_skip_filter_checks)
+        ltte = computeps.get_value(qualifier='ltte', ltte=kwargs.get('ltte', None), default=False)
     else:
         ltte = False
 
     # make sure times is an array and not a list
     times = np.array(times)
 
-    vgamma = b.get_value(qualifier='vgamma', context='system', unit=u.solRad/u.d, **_skip_filter_checks)
-    t0 = b.get_value(qualifier='t0', context='system', unit=u.d, **_skip_filter_checks)
+    vgamma = b.get_value(qualifier='vgamma', context='system', unit=u.solRad/u.d)
+    t0 = b.get_value(qualifier='t0', context='system', unit=u.d)
 
     hier = b.hierarchy
     starrefs = hier.get_stars()
     orbitrefs = hier.get_orbits()
-    s = b.filter(context='component', **_skip_filter_checks)
+    s = b.filter(context='component')
 
     periods, eccs, smas, t0_perpasses, per0s, long_ans, incls, dpdts, \
     deccdts, dperdts, components = [],[],[],[],[],[],[],[],[],[],[]
@@ -75,22 +73,22 @@ def dynamics_from_bundle(b, times, compute=None, return_euler=False, **kwargs):
 
         #print "***", component, ancestororbits
 
-        periods.append([s.get_value(qualifier='period_anom', unit=u.d, component=orbit, **_skip_filter_checks) for orbit in ancestororbits])
-        eccs.append([s.get_value(qualifier='ecc', component=orbit, **_skip_filter_checks) for orbit in ancestororbits])
-        t0_perpasses.append([s.get_value(qualifier='t0_perpass', unit=u.d, component=orbit, **_skip_filter_checks) for orbit in ancestororbits])
-        per0s.append([s.get_value(qualifier='per0', unit=u.rad, component=orbit, **_skip_filter_checks) for orbit in ancestororbits])
-        long_ans.append([s.get_value(qualifier='long_an', unit=u.rad, component=orbit, **_skip_filter_checks) for orbit in ancestororbits])
-        incls.append([s.get_value(qualifier='incl', unit=u.rad, component=orbit, **_skip_filter_checks) for orbit in ancestororbits])
+        periods.append([s.get_value(qualifier='period_anom', unit=u.d, component=orbit) for orbit in ancestororbits])
+        eccs.append([s.get_value(qualifier='ecc', component=orbit) for orbit in ancestororbits])
+        t0_perpasses.append([s.get_value(qualifier='t0_perpass', unit=u.d, component=orbit) for orbit in ancestororbits])
+        per0s.append([s.get_value(qualifier='per0', unit=u.rad, component=orbit) for orbit in ancestororbits])
+        long_ans.append([s.get_value(qualifier='long_an', unit=u.rad, component=orbit) for orbit in ancestororbits])
+        incls.append([s.get_value(qualifier='incl', unit=u.rad, component=orbit) for orbit in ancestororbits])
         # TODO: do we need to convert from anomalistic to sidereal?
-        dpdts.append([s.get_value(qualifier='dpdt', unit=u.d/u.d, component=orbit, **_skip_filter_checks) for orbit in ancestororbits])
+        dpdts.append([s.get_value(qualifier='dpdt', unit=u.d/u.d, component=orbit) for orbit in ancestororbits])
         if conf.devel:
             try:
-                deccdts.append([s.get_value('deccdt', u.dimensionless_unscaled/u.d, component=orbit, **_skip_filter_checks) for orbit in ancestororbits])
+                deccdts.append([s.get_value('deccdt', u.dimensionless_unscaled/u.d, component=orbit) for orbit in ancestororbits])
             except ValueError:
                 deccdts.append([0.0 for orbit in ancestororbits])
         else:
             deccdts.append([0.0 for orbit in ancestororbits])
-        dperdts.append([s.get_value(qualifier='dperdt', unit=u.rad/u.d, component=orbit, **_skip_filter_checks) for orbit in ancestororbits])
+        dperdts.append([s.get_value(qualifier='dperdt', unit=u.rad/u.d, component=orbit) for orbit in ancestororbits])
 
         # sma needs to be the COMPONENT sma.  This is stored in the bundle for stars, but is NOT
         # for orbits in orbits, so we'll need to recompute those from the mass-ratio and sma of
@@ -99,9 +97,9 @@ def dynamics_from_bundle(b, times, compute=None, return_euler=False, **kwargs):
         smas_this = []
         for comp in [component]+ancestororbits[:-1]:
             if comp in starrefs:
-                smas_this.append(s.get_value(qualifier='sma', unit=u.solRad, component=comp, **_skip_filter_checks))
+                smas_this.append(s.get_value(qualifier='sma', unit=u.solRad, component=comp))
             else:
-                q = s.get_value(qualifier='q', component=hier.get_parent_of(comp), **_skip_filter_checks)
+                q = s.get_value(qualifier='q', component=hier.get_parent_of(comp))
                 comp_comp = hier.get_primary_or_secondary(comp)
 
                 # NOTE: similar logic is also in constraints.comp_sma
@@ -111,7 +109,7 @@ def dynamics_from_bundle(b, times, compute=None, return_euler=False, **kwargs):
                 else:
                     qthing = (1. + q)
 
-                smas_this.append(s.get_value(qualifier='sma', unit=u.solRad, component=hier.get_parent_of(comp), **_skip_filter_checks) / qthing)
+                smas_this.append(s.get_value(qualifier='sma', unit=u.solRad, component=hier.get_parent_of(comp)) / qthing)
 
         smas.append(smas_this)
 

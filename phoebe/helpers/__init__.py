@@ -51,14 +51,14 @@ def process_mcmc_chains_from_solution(b, solution, burnin=None, thin=None, lnpro
     * (array, array): `lnprobablities` (flattened to 1D if `flatten`) and `samples`
         (flattened to 2D if `flatten`) after processing
     """
-    solution_ps = b.get_solution(solution=solution, **_skip_filter_checks)
+    solution_ps = b.get_solution(solution=solution)
     adopt_inds, adopt_uniqueids = b._get_adopt_inds_uniqueids(solution_ps, adopt_parameters=adopt_parameters)
 
-    return process_mcmc_chains(solution_ps.get_value(qualifier='lnprobabilities', **_skip_filter_checks),
-                               solution_ps.get_value(qualifier='samples', **_skip_filter_checks),
-                               solution_ps.get_value(qualifier='burnin', burnin=burnin, **_skip_filter_checks),
-                               solution_ps.get_value(qualifier='thin', thin=thin, **_skip_filter_checks),
-                               solution_ps.get_value(qualifier='lnprob_cutoff', lnprob_cutoff=lnprob_cutoff, **_skip_filter_checks),
+    return process_mcmc_chains(solution_ps.get_value(qualifier='lnprobabilities'),
+                               solution_ps.get_value(qualifier='samples'),
+                               solution_ps.get_value(qualifier='burnin', burnin=burnin),
+                               solution_ps.get_value(qualifier='thin', thin=thin),
+                               solution_ps.get_value(qualifier='lnprob_cutoff', lnprob_cutoff=lnprob_cutoff),
                                adopt_inds=adopt_inds, flatten=flatten)
 
 def process_mcmc_chains(lnprobabilities, samples, burnin=0, thin=1, lnprob_cutoff=-np.inf, adopt_inds=None, flatten=True):
@@ -277,7 +277,7 @@ def process_acf_from_solution(b, solution, nlags=None, burnin=None, lnprob_cutof
         of <phoebe.helpers.acf_ci_bartlett>, and float being the
         confidence intervale from <phoebe.helpers.acf_ci>.
     """
-    solution_ps = b.get_solution(solution=solution, **_skip_filter_checks)
+    solution_ps = b.get_solution(solution=solution)
     if solution_ps.kind != 'emcee':
         raise TypeError("solution does not point to an emcee solution")
 
@@ -290,12 +290,12 @@ def process_acf_from_solution(b, solution, nlags=None, burnin=None, lnprob_cutof
                                                                  flatten=False)
 
 
-    nlags = solution_ps.get_value(qualifier='nlags', nlags=nlags, **_skip_filter_checks)
+    nlags = solution_ps.get_value(qualifier='nlags', nlags=nlags)
 
     acfs, acf_bartletts, acf_ci = process_acf(lnprobabilities, samples, nlags)
 
     if adopt_parameters is None:
-        adopt_parameters = solution_ps.get_value(qualifier='fitted_twigs', **_skip_filter_checks)
+        adopt_parameters = solution_ps.get_value(qualifier='fitted_twigs')
 
     keys = ['lnprobabilities'] + list(adopt_parameters)
     if len(keys) != len(acfs):
@@ -326,15 +326,15 @@ def get_emcee_object_from_solution(b, solution, adopt_parameters=None):
     -----------
     * [emcee.EnsembleSampler](https://emcee.readthedocs.io/en/stable/user/sampler/#emcee.EnsembleSampler) object
     """
-    solution_ps = b.get_solution(solution=solution, **_skip_filter_checks)
+    solution_ps = b.get_solution(solution=solution)
     if solution_ps.kind != 'emcee':
         raise ValueError("solution_ps must have kind 'emcee'")
 
     adopt_inds, adopt_uniqueids = b._get_adopt_inds_uniqueids(solution_ps, adopt_parameters=adopt_parameters)
 
-    samples = solution_ps.get_value(qualifier='samples', **_skip_filter_checks) # shape: (niters, nwalkers, nparams)
-    lnprobabilites = solution_ps.get_value(qualifier='lnprobabilities', **_skip_filter_checks) # shape: (niters, nwalkers)
-    acceptance_fractions = solution_ps.get_value(qualifier='acceptance_fractions', **_skip_filter_checks) # shape: (nwalkers)
+    samples = solution_ps.get_value(qualifier='samples') # shape: (niters, nwalkers, nparams)
+    lnprobabilites = solution_ps.get_value(qualifier='lnprobabilities') # shape: (niters, nwalkers)
+    acceptance_fractions = solution_ps.get_value(qualifier='acceptance_fractions') # shape: (nwalkers)
 
     return get_emcee_object(samples[:,:,adopt_inds], lnprobabilites, acceptance_fractions)
 
@@ -396,7 +396,7 @@ def get_dynesty_object_from_solution(b, solution, adopt_parameters=None):
     -----------
     * [dynesty.results.Results](https://dynesty.readthedocs.io/en/latest/api.html#module-dynesty.results) object
     """
-    solution_ps = b.get_solution(solution=solution, **_skip_filter_checks)
+    solution_ps = b.get_solution(solution=solution)
     if solution_ps.kind != 'dynesty':
         raise ValueError("solution_ps must have kind 'dynesty'")
 

@@ -27,6 +27,7 @@ import time
 import types
 import tempfile
 import subprocess
+from contextlib import contextmanager
 from collections import OrderedDict
 from fnmatch import fnmatch
 from copy import deepcopy as _deepcopy
@@ -139,7 +140,8 @@ import logging
 logger = logging.getLogger("PARAMETERS")
 logger.addHandler(logging.NullHandler())
 
-_skip_filter_checks = {'check_default': False, 'check_visible': False}
+_skip_filter_checks = {'check_default': False, 'check_visible': False, 'check_advanced': False}
+_default_filter_kwargs = {}
 
 _parameter_class_that_require_bundle = ['TwigParameter',
                                         'ConstraintParameter', 'DistributionParameter',
@@ -412,7 +414,7 @@ def send_if_client(fctn):
                 # then we need to sit in a poll loop until the job returns as completed
                 # otherwise the user will have to call b.attach_job manually?  Or will the results just come in once done?
                 # should be the single job parameter
-                ret_ += self._bundle.attach_job(uniqueid=ParameterSet([p for p in ret_.to_list() if p._bundle is not None]).get_parameter(qualifier='detached_job', **_skip_filter_checks).uniqueid)
+                ret_ += self._bundle.attach_job(uniqueid=ParameterSet([p for p in ret_.to_list() if p._bundle is not None]).get_parameter(qualifier='detached_job').uniqueid)
 
             if isinstance(ret_, ParameterSet) and not len(ret_._filter.keys()):
                 ret_ = _return_ps(self._bundle, ret_)
@@ -1909,9 +1911,9 @@ class ParameterSet(object):
         action = action if not full_ui else None
 
         if web_client is None:
-            web_client = self._bundle.get_value(qualifier='web_client', context='setting', default=False, **_skip_filter_checks)
+            web_client = self._bundle.get_value(qualifier='web_client', context='setting', default=False)
         if web_client is True:
-            web_client = self._bundle.get_value(qualifier='web_client_url', context='setting', default='ui.phoebe-project.org', **_skip_filter_checks)
+            web_client = self._bundle.get_value(qualifier='web_client_url', context='setting', default='ui.phoebe-project.org')
 
         # TODO: expose options for advanced filters (or include everything by default)
 
@@ -2664,9 +2666,17 @@ class ParameterSet(object):
             # then only 1 item, so return the parameter
             return ps._params[0]
 
+    @contextmanager
+    def skip_filter_checks(self):
+        orig = self._default_filter_kwargs
+        self._default_filter_kwargs = dict(orig)
+        try:
+            yield
+        finally:
+            self._default_filter_kwargs = orig
+
     def filter_or_get(self, twig=None, autocomplete=False, force_ps=False,
-                      check_visible=True, check_default=True,
-                      check_advanced=False, check_single=False, **kwargs):
+                      **kwargs):
         """
 
         Filter the <phoebe.parameters.ParameterSet> based on the meta-tags of its
@@ -2721,6 +2731,12 @@ class ParameterSet(object):
             of the results is exactly 1 and `force_ps=False`, otherwise the
             resulting <phoebe.parameters.ParameterSet>.
         """
+        kwargs = dict(_default_filter_kwargs, **kwargs)
+        check_visible = kwargs.pop('check_visible', True)
+        check_default = kwargs.pop('check_default', True)
+        check_advanced = kwargs.pop('check_advanced', False)
+        check_single = kwargs.pop('check_single', False)
+
         def _return(params, force_ps, method=None, index=None):
             if len(params) == 1 and not force_ps:
                 # then just return the parameter itself
@@ -3696,10 +3712,10 @@ class ParameterSet(object):
         if dataset is not None and not isinstance(dataset, str):
             raise TypeError("model must be of type string or None")
 
-        if not len(self.filter(context='dataset', **_skip_filter_checks).datasets):
-            dataset_ps = self._bundle.get_dataset(dataset=dataset, **_skip_filter_checks)
+        if not len(self.filter(context='dataset').datasets):
+            dataset_ps = self._bundle.get_dataset(dataset=dataset)
         else:
-            dataset_ps = self.filter(dataset=dataset, context='dataset', **_skip_filter_checks)
+            dataset_ps = self.filter(dataset=dataset, context='dataset')
 
         if dataset is not None and dataset not in dataset_ps.datasets:
             raise ValueError("dataset '{}' not found".format(dataset))
@@ -3709,10 +3725,10 @@ class ParameterSet(object):
         if model is not None and not isinstance(model, str):
             raise TypeError("model must be of type string or None")
 
-        if not len(self.filter(context='model', **_skip_filter_checks).models):
-            model_ps = self._bundle.filter(model=model, context='model', dataset=dataset, component=component, **_skip_filter_checks)
+        if not len(self.filter(context='model').models):
+            model_ps = self._bundle.filter(model=model, context='model', dataset=dataset, component=component)
         else:
-            model_ps = self.filter(model=model, context='model', dataset=dataset, component=component, **_skip_filter_checks)
+            model_ps = self.filter(model=model, context='model', dataset=dataset, component=component)
 
         if model is not None and model not in model_ps.models:
             raise ValueError("model '{}' not found".format(model))
@@ -3730,19 +3746,19 @@ class ParameterSet(object):
             raise NotImplementedError("calculate_residuals not implemented for dataset with kind='{}' (model={}, dataset={}, component={})".format(dataset_kind, model, dataset, component))
 
 
-        dataset_param_ps = dataset_ps.filter(qualifier=qualifier, component=component, **_skip_filter_checks)
+        dataset_param_ps = dataset_ps.filter(qualifier=qualifier, component=component)
         if len(dataset_param_ps.to_list()) > 1:
             raise ValueError("filter (dataset={}, qualifier={}, component={}) resulted in more than one parameter".format(dataset_ps.dataset, qualifier, component))
         elif len(dataset_param_ps.to_list()) == 0:
             raise ValueError("filter (dataset={}, qualifier={}, component={}) resulted in no parameters".format(dataset_ps.dataset, qualifier, component))
         else:
             dataset_param = dataset_param_ps.to_list()[0]
-        dataset_param = dataset_ps.get_parameter(qualifier=qualifier, component=component, **_skip_filter_checks)
-        model_param = model_ps.get_parameter(qualifier=qualifier, **_skip_filter_checks)
+        dataset_param = dataset_ps.get_parameter(qualifier=qualifier, component=component)
+        model_param = model_ps.get_parameter(qualifier=qualifier)
 
         # TODO: do we need to worry about conflicting units?
         # NOTE: this should automatically handle interpolating in phases, if necessary
-        times = dataset_ps.get_value(qualifier='times', component=component, **_skip_filter_checks)
+        times = dataset_ps.get_value(qualifier='times', component=component)
         if not len(times):
             residuals = np.array([])
             interp_model = np.array([])
@@ -3772,12 +3788,12 @@ class ParameterSet(object):
             else:
                 raise ValueError("{}@{}@{} and {}@{}@{} do not have the same length, cannot compute residuals".format(qualifier, component, dataset, 'times', component, dataset))
 
-        mask_enabled = dataset_ps.get_value(qualifier='mask_enabled', default=False, mask_enabled=mask_enabled, **_skip_filter_checks)
+        mask_enabled = dataset_ps.get_value(qualifier='mask_enabled', default=False, mask_enabled=mask_enabled)
         if mask_enabled:
-            mask_phases = dataset_ps.get_value(qualifier='mask_phases', mask_phases=mask_phases, **_skip_filter_checks)
-            mask_period = dataset_ps.get_value(qualifier='phases_period', default='period', **_skip_filter_checks)
-            mask_dpdt = dataset_ps.get_value(qualifier='phases_dpdt', default='dpdt', **_skip_filter_checks)
-            mask_t0 = dataset_ps.get_value(qualifier='phases_t0', **_skip_filter_checks)
+            mask_phases = dataset_ps.get_value(qualifier='mask_phases', mask_phases=mask_phases)
+            mask_period = dataset_ps.get_value(qualifier='phases_period', default='period')
+            mask_dpdt = dataset_ps.get_value(qualifier='phases_dpdt', default='dpdt')
+            mask_t0 = dataset_ps.get_value(qualifier='phases_t0')
             if len(mask_phases):
                 phases = self._bundle.to_phase(times, period=mask_period, dpdt=mask_dpdt, t0=mask_t0)
 
@@ -3814,17 +3830,17 @@ class ParameterSet(object):
         if model is not None and not isinstance(model, str):
             raise TypeError("model must be of type string or None")
 
-        if not len(self.filter(context='model', **_skip_filter_checks).models):
-            model_ps = self._bundle.filter(model=model, context='model', dataset=dataset, component=component, **_skip_filter_checks)
+        if not len(self.filter(context='model').models):
+            model_ps = self._bundle.filter(model=model, context='model', dataset=dataset, component=component)
         else:
-            model_ps = self.filter(model=model, context='model', dataset=dataset, component=component, **_skip_filter_checks)
+            model_ps = self.filter(model=model, context='model', dataset=dataset, component=component)
 
         if model is not None and model not in model_ps.models:
             raise ValueError("model '{}' not found".format(model))
 
 
         for ds in model_ps.datasets:
-            ds_comps = model_ps.filter(dataset=ds, **_skip_filter_checks).components
+            ds_comps = model_ps.filter(dataset=ds).components
             if not len(ds_comps):
                 ds_comps = [None]
 
@@ -3834,24 +3850,24 @@ class ParameterSet(object):
                                                                    consider_gaussian_process=consider_gaussian_process,
                                                                    mask_enabled=mask_enabled, mask_phases=mask_phases,
                                                                    as_quantity=True)
-                ds_ps = self._bundle.get_dataset(dataset=ds, **_skip_filter_checks)
-                sigmas = ds_ps.get_value(qualifier='sigmas', component=ds_comp, unit=residuals.unit, **_skip_filter_checks)
+                ds_ps = self._bundle.get_dataset(dataset=ds)
+                sigmas = ds_ps.get_value(qualifier='sigmas', component=ds_comp, unit=residuals.unit)
 
-                mask_enabled = ds_ps.get_value(qualifier='mask_enabled', default=False, mask_enabled=mask_enabled, **_skip_filter_checks)
+                mask_enabled = ds_ps.get_value(qualifier='mask_enabled', default=False, mask_enabled=mask_enabled)
                 if mask_enabled:
-                    mask_phases = ds_ps.get_value(qualifier='mask_phases', mask_phases=mask_phases, **_skip_filter_checks)
-                    mask_period = ds_ps.get_value(qualifier='phases_period', default='period', **_skip_filter_checks)
-                    mask_dpdt = ds_ps.get_value(qualifier='phases_dpdt', default='dpdt', **_skip_filter_checks)
-                    mask_t0 = ds_ps.get_value(qualifier='phases_t0', **_skip_filter_checks)
+                    mask_phases = ds_ps.get_value(qualifier='mask_phases', mask_phases=mask_phases)
+                    mask_period = ds_ps.get_value(qualifier='phases_period', default='period')
+                    mask_dpdt = ds_ps.get_value(qualifier='phases_dpdt', default='dpdt')
+                    mask_t0 = ds_ps.get_value(qualifier='phases_t0')
                     if len(mask_phases):
-                        times = ds_ps.get_value(qualifier='times', component=ds_comp, unit=u.d, **_skip_filter_checks)
+                        times = ds_ps.get_value(qualifier='times', component=ds_comp, unit=u.d)
                         phases = self._bundle.to_phase(times, period=mask_period, dpdt=mask_dpdt, t0=mask_t0)
 
                         inds = phase_mask_inds(phases, mask_phases)
 
                         sigmas = sigmas[inds]
 
-                sigmas_lnf = ds_ps.get_value(qualifier='sigmas_lnf', component=ds_comp, default=-np.inf, **_skip_filter_checks)
+                sigmas_lnf = ds_ps.get_value(qualifier='sigmas_lnf', component=ds_comp, default=-np.inf)
                 dataset_kind = ds_ps.kind
 
                 if len(sigmas):
@@ -4113,19 +4129,19 @@ class ParameterSet(object):
         #     return _handle_additional_calls(ps, return_)
 
         if ps.context=='compute' and len(ps.computes)>1:
-            for compute in ps.filter(compute=kwargs.get('compute', filter_kwargs.get('compute', None)), **_skip_filter_checks).computes:
+            for compute in ps.filter(compute=kwargs.get('compute', filter_kwargs.get('compute', None))).computes:
                 this_return = ps.filter(check_visible=False, compute=compute)._unpack_plotting_kwargs(animate=animate, **kwargs)
                 return_ += this_return
             return _handle_additional_calls(ps, return_)
 
         elif ps.context=='solver' and len(ps.solvers)>1:
-            for solver in ps.filter(solver=kwargs.get('solver', filter_kwargs.get('solver', None)), **_skip_filter_checks).solvers:
+            for solver in ps.filter(solver=kwargs.get('solver', filter_kwargs.get('solver', None))).solvers:
                 this_return = ps.filter(check_visible=False, solver=solver)._unpack_plotting_kwargs(animate=animate, **kwargs)
                 return_ += this_return
             return _handle_additional_calls(ps, return_)
 
         elif ps.context=='solution' and len(ps.solutions)>1:
-            for solution in ps.filter(solution=kwargs.get('solution', filter_kwargs.get('solution', None)), **_skip_filter_checks).solutions:
+            for solution in ps.filter(solution=kwargs.get('solution', filter_kwargs.get('solution', None))).solutions:
                 # print("*** solution loop, solution={}".format(solution))
                 this_return = ps.filter(check_visible=False, solution=solution)._unpack_plotting_kwargs(animate=animate, **kwargs)
                 return_ += this_return
@@ -4133,11 +4149,11 @@ class ParameterSet(object):
 
         elif ps.context in ['dataset', 'model'] and len(ps.datasets)>1 and not (ps.context=='dataset' and ps.kind in ['mesh', 'orb']):
             # print("*** entering dataset loop, filter_kwargs['dataset']={}, kwargs['dataset']={}".format(filter_kwargs.get('dataset', None), kwargs.get('dataset', None)))
-            for dataset in ps.filter(dataset=kwargs.get('dataset', filter_kwargs.get('dataset', None)), **_skip_filter_checks).datasets:
+            for dataset in ps.filter(dataset=kwargs.get('dataset', filter_kwargs.get('dataset', None))).datasets:
                 # print("*** dataset loop, context={}, dataset={}".format(ps.context, dataset))
                 # print("*** dataset loop filter_kwargs['model']={}, kwargs['model']={}".format(filter_kwargs.get('model', None), kwargs.get('model', None)))
                 filter_model = kwargs.get('model', filter_kwargs.get('model', None))
-                if filter_model is not None and dataset not in self._bundle.filter(model=filter_model, context='model', **_skip_filter_checks).datasets:
+                if filter_model is not None and dataset not in self._bundle.filter(model=filter_model, context='model').datasets:
                     # in cases where a dataset is disabled for a certain model, we shouldn't
                     # try to plot the observations when model was provided
                     continue
@@ -4164,7 +4180,7 @@ class ParameterSet(object):
 
         if len(ps.models) > 1: # and ps.context=='model'
             # we'll filter by filter_kwargs again in case it wasn't filtered above for being in default_contexts
-            for model in ps.filter(model=kwargs.get('model', filter_kwargs.get('model', None)), **_skip_filter_checks).models:
+            for model in ps.filter(model=kwargs.get('model', filter_kwargs.get('model', None))).models:
                 # TODO: change linestyle for models instead of color?
                 # print("*** model loop, model={}".format(model))
                 this_return = ps.filter(check_visible=False, model=model)._unpack_plotting_kwargs(animate=animate, **kwargs)
@@ -4181,7 +4197,7 @@ class ParameterSet(object):
         if len(ps.components) > 1 and ps.context in ['model', 'dataset'] and ps.kind not in ['lc']:
             # lc has per-component passband-dependent parameters in the dataset which are not plottable
             return_ = []
-            for component in ps.filter(component=kwargs.get('component', filter_kwargs.get('component', None)), **_skip_filter_checks).exclude(qualifier=['*_phases', 'phases_*'], **_skip_filter_checks).components:
+            for component in ps.filter(component=kwargs.get('component', filter_kwargs.get('component', None))).exclude(qualifier=['*_phases', 'phases_*']).components:
                 # print("*** component loop, component={}".format(component))
                 this_return = ps.filter(check_visible=False, component=component)._unpack_plotting_kwargs(animate=animate, **kwargs)
                 return_ += this_return
@@ -4193,7 +4209,7 @@ class ParameterSet(object):
             # nothing to plot here... at least for now
             return []
 
-        if ps.kind in ['lp'] and not len(ps.filter(qualifier='flux_densities', **_skip_filter_checks)):
+        if ps.kind in ['lp'] and not len(ps.filter(qualifier='flux_densities')):
             # then maybe we're in the dataset where just compute_times is defined
             return []
 
@@ -4264,23 +4280,23 @@ class ParameterSet(object):
                     kwargs['{}error'.format(d)] = kwargs.pop('{}errors'.format(d))
 
         def _handle_mask(ps, array, **kwargs):
-            mask_enabled = ps.get_value(qualifier='mask_enabled', mask_enabled=kwargs.get('mask_enabled', None), default=False, **_skip_filter_checks)
+            mask_enabled = ps.get_value(qualifier='mask_enabled', mask_enabled=kwargs.get('mask_enabled', None), default=False)
             if not mask_enabled:
                 return array
 
             # mask_phases and phases_t0 was excluded from the filter to avoid
             # looping over the components they're attached to, so we'll need
             # to re-filter for the entire dataset first
-            ps_ds = ps._bundle.get_dataset(dataset=ps.dataset, **_skip_filter_checks)
-            mask_phases = ps_ds.get_value(qualifier='mask_phases', mask_phases=kwargs.get('mask_phases', None), **_skip_filter_checks)
+            ps_ds = ps._bundle.get_dataset(dataset=ps.dataset)
+            mask_phases = ps_ds.get_value(qualifier='mask_phases', mask_phases=kwargs.get('mask_phases', None))
             if not len(mask_phases):
                 return array
 
-            mask_period = ps_ds.get_value(qualifier='phases_period', default='period', phases_period=kwargs.get('phases_period', None), **_skip_filter_checks)
-            mask_dpdt = ps_ds.get_value(qualifier='phases_dpdt', default='dpdt', phases_dpdt=kwargs.get('phases_dpdt', None), **_skip_filter_checks)
-            mask_t0 = ps_ds.get_value(qualifier='phases_t0', phases_t0=kwargs.get('phases_t0', None), **_skip_filter_checks)
+            mask_period = ps_ds.get_value(qualifier='phases_period', default='period', phases_period=kwargs.get('phases_period', None))
+            mask_dpdt = ps_ds.get_value(qualifier='phases_dpdt', default='dpdt', phases_dpdt=kwargs.get('phases_dpdt', None))
+            mask_t0 = ps_ds.get_value(qualifier='phases_t0', phases_t0=kwargs.get('phases_t0', None))
 
-            times = ps.get_value(qualifier='times', unit=u.d, **_skip_filter_checks)
+            times = ps.get_value(qualifier='times', unit=u.d)
             phases = ps._bundle.to_phase(times, period=mask_period, dpdt=mask_dpdt, t0=mask_t0)
 
             return array[phase_mask_inds(phases, mask_phases)]
@@ -4313,14 +4329,14 @@ class ParameterSet(object):
 
                     if kwargs['autofig_method'] == 'mesh' and current_value in ['xs', 'ys', 'zs']:
                         # then we actually need to unpack from the xyz_elements
-                        verts = ps.get_quantity(qualifier='xyz_elements', **_skip_filter_checks)
+                        verts = ps.get_quantity(qualifier='xyz_elements')
                         if not verts.shape[0]:
                             return None
                         array_value = verts.value[:, :, ['xs', 'ys', 'zs'].index(current_value)] * verts.unit
 
                         if direction == 'z':
                             try:
-                                norms = ps.get_quantity(qualifier='xyz_normals', **_skip_filter_checks)
+                                norms = ps.get_quantity(qualifier='xyz_normals')
                             except ValueError:
                                 # if importing from 2.1, uvw_elements may exist, but uvw_normals won't
                                 array_value_norms = None
@@ -4333,14 +4349,14 @@ class ParameterSet(object):
 
                     elif kwargs['autofig_method'] == 'mesh' and current_value in ['us', 'vs', 'ws']:
                         # then we actually need to unpack from the uvw_elements
-                        verts = ps.get_quantity(qualifier='uvw_elements', **_skip_filter_checks)
+                        verts = ps.get_quantity(qualifier='uvw_elements')
                         if not verts.shape[0]:
                             return None
                         array_value = verts.value[:, :, ['us', 'vs', 'ws'].index(current_value)] * verts.unit
 
                         if direction == 'z':
                             try:
-                                norms = ps.get_quantity(qualifier='uvw_normals', **_skip_filter_checks)
+                                norms = ps.get_quantity(qualifier='uvw_normals')
                             except ValueError:
                                 # if importing from 2.1, uvw_elements may exist, but uvw_normals won't
                                 array_value_norms = None
@@ -4353,8 +4369,8 @@ class ParameterSet(object):
 
                     elif current_value in ['time', 'times'] and 'residuals' in [i for i in kwargs.values() if isinstance(i, str)]:
                         # then we actually need to pull the times from the dataset instead of the model since the length may not match
-                        ds_ps = ps._bundle.get_dataset(dataset=ps.dataset, **_skip_filter_checks)
-                        array_value = _handle_mask(ds_ps, ds_ps.get_quantity(qualifier='times', component=ps.component, **_skip_filter_checks), **kwargs)
+                        ds_ps = ps._bundle.get_dataset(dataset=ps.dataset)
+                        array_value = _handle_mask(ds_ps, ds_ps.get_quantity(qualifier='times', component=ps.component), **kwargs)
 
                     else:
                         if '@' in current_value:
@@ -4363,16 +4379,16 @@ class ParameterSet(object):
                         else:
                             psf = ps
 
-                        psff = psf.filter(twig=current_value, **_skip_filter_checks)
+                        psff = psf.filter(twig=current_value)
                         if len(psff)==1:
                             if hasattr(psff.get_parameter(**_skip_filter_checks), 'get_quantity'):
                                 array_value = psff.get_quantity(**_skip_filter_checks)
                             else:
                                 array_value = psff.get_value(**_skip_filter_checks)
-                        elif len(psff.times) > 1 and psff.get_value(time=psff.times[0], **_skip_filter_checks):
+                        elif len(psff.times) > 1 and psff.get_value(time=psff.times[0]):
                             # then we'll assume we have something like volume vs times.  If not, then there may be a length mismatch issue later
-                            unit = psff.get_quantity(time=psff.times[0], **_skip_filter_checks).unit
-                            array_value = np.array([psff.get_quantity(time=time, **_skip_filter_checks).to(unit).value for time in psff.times])*unit
+                            unit = psff.get_quantity(time=psff.times[0]).unit
+                            array_value = np.array([psff.get_quantity(time=time).to(unit).value for time in psff.times])*unit
                         else:
                             raise ValueError("could not find Parameter for {} in {}".format(current_value, psf.get_meta(ignore=['uniqueid', 'uniquetwig', 'twig'])))
 
@@ -4387,10 +4403,10 @@ class ParameterSet(object):
                         if isinstance(errors, np.ndarray) or isinstance(errors, float) or isinstance(errors, int):
                             kwargs[errorkey] = errors
                         elif isinstance(errors, str):
-                            errors = _handle_mask(ps, ps.get_quantity(kwargs.get(errorkey), **_skip_filter_checks), **kwargs)
+                            errors = _handle_mask(ps, ps.get_quantity(kwargs.get(errorkey)), **kwargs)
                             kwargs[errorkey] = errors
                         else:
-                            sigmas = _handle_mask(ps, ps.get_quantity(qualifier='sigmas', **_skip_filter_checks), **kwargs)
+                            sigmas = _handle_mask(ps, ps.get_quantity(qualifier='sigmas'), **kwargs)
                             if len(sigmas):
                                 kwargs.setdefault(errorkey, sigmas)
 
@@ -4412,7 +4428,7 @@ class ParameterSet(object):
                     # these are not tagged with the time, so we need to find them
                     full_dataset_meta = ps.get_meta(ignore=['uniqueid', 'uniquetwig', 'twig', 'qualifier', 'time'])
                     full_dataset_ps = ps._bundle.filter(check_visible=False, **full_dataset_meta)
-                    candidate_params = full_dataset_ps.filter(qualifier=current_value, **_skip_filter_checks)
+                    candidate_params = full_dataset_ps.filter(qualifier=current_value)
                     if len(candidate_params) == 1:
                         kwargs[direction] = candidate_params.get_quantity()
                         kwargs.setdefault('{}label'.format(direction), _plural_to_singular_get(current_value))
@@ -4432,11 +4448,11 @@ class ParameterSet(object):
 
                     if 'residuals' in [i for i in kwargs.values() if isinstance(i, str)]:
                         # then we actually need to pull the times from the dataset instead of the model since the length may not match
-                        ds_ps = ps._bundle.get_dataset(dataset=ps.dataset, **_skip_filter_checks)
-                        times = ds_ps.get_value(qualifier='times', component=ps.component, **_skip_filter_checks)
+                        ds_ps = ps._bundle.get_dataset(dataset=ps.dataset)
+                        times = ds_ps.get_value(qualifier='times', component=ps.component)
                         times = _handle_mask(ds_ps, times, **kwargs)
                     else:
-                        times = ps.get_value(qualifier='times', unit=u.d, **_skip_filter_checks)
+                        times = ps.get_value(qualifier='times', unit=u.d)
                         times = _handle_mask(ps, times, **kwargs)
 
                     kwargs[direction] = self._bundle.to_phase(times, component=component_phase, period=kwargs.get('period', 'period'), t0=kwargs.get('t0', 't0_supconj'), dpdt=kwargs.get('dpdt', 'dpdt')) * u.dimensionless_unscaled
@@ -4461,9 +4477,9 @@ class ParameterSet(object):
                         logger.info("skipping residuals_spread for dataset")
                         return {}
 
-                    if '-sigma' in self._bundle.get_value(qualifier='sample_mode', model=ps.model, context='model', default='none', **_skip_filter_checks):
+                    if '-sigma' in self._bundle.get_value(qualifier='sample_mode', model=ps.model, context='model', default='none'):
                         # NOTE: this probably needs to be interpolated
-                        kwargs[direction] = ps.get_quantity(qualifier=['fluxes', 'rvs'], model=ps.model, dataset=ps.dataset, component=ps.component, context='model', **_skip_filter_checks)
+                        kwargs[direction] = ps.get_quantity(qualifier=['fluxes', 'rvs'], model=ps.model, dataset=ps.dataset, component=ps.component, context='model')
                         kwargs[direction] -= kwargs[direction][1]
                         kwargs.setdefault('{}label'.format(direction), '{} residuals'.format({'lc': 'flux', 'rv': 'rv'}.get(ps.kind, '')))
                         kwargs['{}qualifier'.format(direction)] = 'residuals'
@@ -4478,14 +4494,14 @@ class ParameterSet(object):
                         logger.info("skipping residuals for dataset")
                         return {}
 
-                    if '-sigma' in self._bundle.get_value(qualifier='sample_mode', model=ps.model, context='model', default='none', **_skip_filter_checks):
+                    if '-sigma' in self._bundle.get_value(qualifier='sample_mode', model=ps.model, context='model', default='none'):
                         # TODO: if we ever use this for anything else, then we'll need to make it a list instead and append new items
                         # kwargs['additional_calls'] = {'y': 'residuals_spread', 'ps': ps, **{k:v for k,v in kwargs.items() if k in ['x']}} # not python2 safe :-(
 
                         if kwargs.get('xqualifier', 'times') in ['time', 'times']:
-                            sample_x = self._bundle.get_quantity(qualifier='times', model=ps.model, component=ps.component, dataset=ps.dataset, context='model', **_skip_filter_checks)
+                            sample_x = self._bundle.get_quantity(qualifier='times', model=ps.model, component=ps.component, dataset=ps.dataset, context='model')
                         elif kwargs.get('xqualifier', 'times') in ['phase', 'phases']:
-                            sample_times = self._bundle.get_value(qualifier='times', model=ps.model, component=ps.component, dataset=ps.dataset, context='model', unit=u.d, **_skip_filter_checks)
+                            sample_times = self._bundle.get_value(qualifier='times', model=ps.model, component=ps.component, dataset=ps.dataset, context='model', unit=u.d)
                             # TODO: should this to_phase take t0/period?
                             sample_x = self._bundle.to_phase(sample_times) * u.dimensionless_unscaled
                         else:
@@ -4512,12 +4528,12 @@ class ParameterSet(object):
                     if isinstance(errors, np.ndarray) or isinstance(errors, float) or isinstance(errors, int):
                         kwargs[errorkey] = errors
                     elif isinstance(errors, str):
-                        ds_ps = self._bundle.get_dataset(ps.dataset, **_skip_filter_checks)
-                        errors = ds_ps.get_quantity(qualifier=kwargs.get(errorkey), context='dataset', **_skip_filter_checks)
+                        ds_ps = self._bundle.get_dataset(ps.dataset)
+                        errors = ds_ps.get_quantity(qualifier=kwargs.get(errorkey), context='dataset')
                         kwargs[errorkey] = _handle_mask(ds_ps, errors, **kwargs)
                     else:
-                        ds_ps = self._bundle.get_dataset(ps.dataset, **_skip_filter_checks)
-                        sigmas = ds_ps.get_quantity(qualifier='sigmas', component=ps.component, context='dataset', **_skip_filter_checks)
+                        ds_ps = self._bundle.get_dataset(ps.dataset)
+                        sigmas = ds_ps.get_quantity(qualifier='sigmas', component=ps.component, context='dataset')
                         sigmas = _handle_mask(ds_ps, sigmas, **kwargs)
                         if len(sigmas):
                             kwargs.setdefault(errorkey, sigmas)
@@ -4533,7 +4549,7 @@ class ParameterSet(object):
                     if ps.kind == 'mesh' and ps._bundle is not None:
                         full_mesh_meta = ps.get_meta(ignore=['uniqueid', 'uniquetwig', 'twig', 'qualifier', 'dataset'])
                         full_mesh_ps = ps._bundle.filter(check_visible=False, **full_mesh_meta)
-                        candidate_params = full_mesh_ps.filter(current_value, **_skip_filter_checks)
+                        candidate_params = full_mesh_ps.filter(current_value)
                         if len(candidate_params) == 1:
                             kwargs[direction] = candidate_params.get_quantity()
                             kwargs.setdefault('{}label'.format(direction), _plural_to_singular_get(current_value))
@@ -4756,24 +4772,24 @@ class ParameterSet(object):
         cartesian = ['xs', 'ys', 'zs', 'us', 'vs', 'ws']
         if ps.context == 'model' and kwargs.get('style', None) in ['corner', 'failed']:
             kwargs['plot_package'] = 'corner'
-            kwargs['data'] = ps.get_value(qualifier='samples', default=[], **_skip_filter_checks)
+            kwargs['data'] = ps.get_value(qualifier='samples', default=[])
 
 
             # TODO: use units from fitted_units instead of parameter?
 
             try:
-                params_uniqueids_and_indices = [_extract_index_from_string(uid) for uid in ps.get_value(qualifier='sampled_uniqueids', **_skip_filter_checks)]
-                param_list = [self._bundle.get_parameter(uniqueid=uniqueid, **_skip_filter_checks) for uniqueid, index in params_uniqueids_and_indices]
+                params_uniqueids_and_indices = [_extract_index_from_string(uid) for uid in ps.get_value(qualifier='sampled_uniqueids')]
+                param_list = [self._bundle.get_parameter(uniqueid=uniqueid) for uniqueid, index in params_uniqueids_and_indices]
                 kwargs['labels'] = [_corner_label(param, uid_and_index[1]) for param, uid_and_index in zip(param_list, param_uniqueids_and_indices)]
             except:
                 logger.warning("could not match to sampled_uniqueids, falling back on sampled_twigs")
-                params_twigs_and_indices = [_extract_index_from_string(twig) for twig in ps.get_value(qualifier='sampled_twigs', **_skip_filter_checks)]
-                param_list = [self._bundle.get_parameter(twig=twig, **_skip_filter_checks) for twig, index in params_twigs_and_indices]
+                params_twigs_and_indices = [_extract_index_from_string(twig) for twig in ps.get_value(qualifier='sampled_twigs')]
+                param_list = [self._bundle.get_parameter(twig=twig) for twig, index in params_twigs_and_indices]
                 kwargs['labels'] = [_corner_label(param, twig_and_index[1]) for param, twig_and_index in zip(param_list, param_twigs_and_indices)]
 
             if kwargs.get('style') == 'failed':
                 kwargs.setdefault('plot_uncertainties', False)
-                kwargs['failed_samples'] = ps.get_value(qualifier='failed_samples', default={}, **_skip_filter_checks)
+                kwargs['failed_samples'] = ps.get_value(qualifier='failed_samples', default={})
 
             return (kwargs,)
         elif ps.context == 'distribution':
@@ -4786,23 +4802,23 @@ class ParameterSet(object):
             kwargs['dc'], _ = self._bundle.get_distribution_collection(twig=kwargs.get('distribution_twig', 'priors@{}'.format(ps.solver)))
             return (kwargs,)
         elif ps.context == 'compute':
-            if not len(ps.get_value(qualifier='sample_from', expand=True, **_skip_filter_checks)):
+            if not len(ps.get_value(qualifier='sample_from', expand=True)):
                 return []
             kwargs['plot_package'] = 'distl'
             kwargs['dc'], _ = self._bundle.get_distribution_collection(twig=kwargs.get('distribution_twig', 'sample_from@{}'.format(ps.compute)))
             return (kwargs,)
         elif ps.kind in ['lc_periodogram', 'rv_periodogram']:
             kwargs['plot_package'] = 'autofig'
-            kwargs['x'] = ps.get_quantity(qualifier='period', **_skip_filter_checks)
+            kwargs['x'] = ps.get_quantity(qualifier='period')
             kwargs['xlabel'] = 'period'
-            kwargs['y'] = ps.get_value(qualifier='power', **_skip_filter_checks)
+            kwargs['y'] = ps.get_value(qualifier='power')
             kwargs['ylabel'] = 'power'
 
             kwargs.setdefault('marker', 'None')
             # kwargs.setdefault('linestyle', 'solid')
 
             axvline_kwargs = {'plot_package': 'autofig', 'autofig_method': 'plot'}
-            axvline_kwargs['x'] = ps.get_value(qualifier='fitted_values', **_skip_filter_checks)[0] * ps.get_value(qualifier='period_factor', period_factor=kwargs.get('period_factor', None), **_skip_filter_checks) * u.d
+            axvline_kwargs['x'] = ps.get_value(qualifier='fitted_values')[0] * ps.get_value(qualifier='period_factor', period_factor=kwargs.get('period_factor', None)) * u.d
             axvline_kwargs['linestyle'] = 'dashed'
             axvline_kwargs['axvline'] = True # to avoid the empty y ignore in plot
 
@@ -4810,14 +4826,14 @@ class ParameterSet(object):
             return (kwargs, axvline_kwargs)
 
         elif ps.kind == 'lc_geometry':
-            # lc = ps.get_value(qualifier='lc', **_skip_filter_checks)
-            orbit = ps.get_value(qualifier='orbit', **_skip_filter_checks)
+            # lc = ps.get_value(qualifier='lc')
+            orbit = ps.get_value(qualifier='orbit')
             primary, secondary = self._bundle.hierarchy.get_children_of(orbit)
-            # phases = self._bundle.to_phase(self._bundle.get_value(qualifier='times', dataset=lc, context='dataset', **_skip_filter_checks))
-            # fluxes = self._bundle.get_value(qualifier='fluxes', dataset=lc, context='dataset', **_skip_filter_checks)
-            phases = ps.get_value(qualifier='input_phases', **_skip_filter_checks)
-            fluxes = ps.get_value(qualifier='input_fluxes', **_skip_filter_checks)
-            sigmas = ps.get_value(qualifier='input_sigmas', **_skip_filter_checks)
+            # phases = self._bundle.to_phase(self._bundle.get_value(qualifier='times', dataset=lc, context='dataset'))
+            # fluxes = self._bundle.get_value(qualifier='fluxes', dataset=lc, context='dataset')
+            phases = ps.get_value(qualifier='input_phases')
+            fluxes = ps.get_value(qualifier='input_fluxes')
+            sigmas = ps.get_value(qualifier='input_sigmas')
             kwargs['plot_package'] = 'autofig'
             kwargs['autofig_method'] = 'plot'
             kwargs['x'] = phases
@@ -4836,22 +4852,22 @@ class ParameterSet(object):
 
             addl_kwargss = []
 
-            analytic_phases = ps.get_value(qualifier='analytic_phases', defualt=None, **_skip_filter_checks)
+            analytic_phases = ps.get_value(qualifier='analytic_phases', defualt=None)
             if analytic_phases is not None:
-                analytic_fluxes_dict = ps.get_value(qualifier='analytic_fluxes', **_skip_filter_checks)
-                analytic_best_model = ps.get_value(qualifier='analytic_best_model', **_skip_filter_checks)
+                analytic_fluxes_dict = ps.get_value(qualifier='analytic_fluxes')
+                analytic_best_model = ps.get_value(qualifier='analytic_best_model')
                 analytic_fluxes = analytic_fluxes_dict[analytic_best_model]
                 addl_kwargss += [{'plot_package': 'autofig', 'autofig_method': 'plot', 'x': analytic_phases, 'y': analytic_fluxes, 'marker': 'None', 'c': 'k', 'linestyle': 'solid', 's': 0.04, 'label': analytic_best_model}]
 
-            ecl_edges = ps.get_value(qualifier='eclipse_edges', **_skip_filter_checks)
+            ecl_edges = ps.get_value(qualifier='eclipse_edges')
 
-            pcolor = self._bundle.get_value(qualifier='color', component=primary, default='blue', **_skip_filter_checks)
+            pcolor = self._bundle.get_value(qualifier='color', component=primary, default='blue')
             addl_kwargss += [{'plot_package': 'autofig', 'autofig_method': 'plot', 'axvline': True, 'x': [_phase_wrap(phase)], 'xlabel': 'phase', 'c': pcolor, 'linestyle': 'dashed'} for phase in ecl_edges[:2]]
-            addl_kwargss += [{'plot_package': 'autofig', 'autofig_method': 'plot', 'axvline': True, 'x': [_phase_wrap(ps.get_value(qualifier='primary_phase', **_skip_filter_checks))], 'xlabel': 'phase', 'c': pcolor, 'label': 'primary ({}) eclipse'.format(primary) if primary!='primary' else 'primary eclipse', 'linestyle': 'solid'}]
+            addl_kwargss += [{'plot_package': 'autofig', 'autofig_method': 'plot', 'axvline': True, 'x': [_phase_wrap(ps.get_value(qualifier='primary_phase'))], 'xlabel': 'phase', 'c': pcolor, 'label': 'primary ({}) eclipse'.format(primary) if primary!='primary' else 'primary eclipse', 'linestyle': 'solid'}]
 
-            scolor = self._bundle.get_value(qualifier='color', component=secondary, default='orange', **_skip_filter_checks)
+            scolor = self._bundle.get_value(qualifier='color', component=secondary, default='orange')
             addl_kwargss += [{'plot_package': 'autofig', 'autofig_method': 'plot', 'axvline': True, 'x': [_phase_wrap(phase)], 'xlabel': 'phase', 'c': scolor, 'linestyle': 'dashed'} for phase in ecl_edges[2:]]
-            addl_kwargss += [{'plot_package': 'autofig', 'autofig_method': 'plot', 'axvline': True, 'x': [_phase_wrap(ps.get_value(qualifier='secondary_phase', **_skip_filter_checks))], 'xlabel': 'phase', 'c': scolor, 'label': 'secondary ({}) eclipse'.format(secondary) if secondary!='secondary' else 'secondary eclipse', 'linestyle': 'solid'}]
+            addl_kwargss += [{'plot_package': 'autofig', 'autofig_method': 'plot', 'axvline': True, 'x': [_phase_wrap(ps.get_value(qualifier='secondary_phase'))], 'xlabel': 'phase', 'c': scolor, 'label': 'secondary ({}) eclipse'.format(secondary) if secondary!='secondary' else 'secondary eclipse', 'linestyle': 'solid'}]
 
 
             # for model, analytic_fluxes in analytic_fluxes_dict.items():
@@ -4862,7 +4878,7 @@ class ParameterSet(object):
             return [kwargs] + addl_kwargss
 
         elif ps.kind == 'rv_geometry':
-            orbit = ps.get_value(qualifier='orbit', **_skip_filter_checks)
+            orbit = ps.get_value(qualifier='orbit')
             primary, secondary = self._bundle.hierarchy.get_children_of(orbit)
 
             kwargs['xlabel'] = 'phase'
@@ -4873,12 +4889,12 @@ class ParameterSet(object):
 
             kwargss = [_deepcopy(kwargs), _deepcopy(kwargs), _deepcopy(kwargs), _deepcopy(kwargs)]
             for i,comp in enumerate([primary, secondary]):
-                phases = ps.get_value(qualifier='input_phases', component=comp, **_skip_filter_checks)
-                input_rvs = ps.get_value(qualifier='input_rvs', component=comp, unit='km/s', **_skip_filter_checks)
-                input_sigmas = ps.get_value(qualifier='input_sigmas', component=comp, **_skip_filter_checks)
+                phases = ps.get_value(qualifier='input_phases', component=comp)
+                input_rvs = ps.get_value(qualifier='input_rvs', component=comp, unit='km/s')
+                input_sigmas = ps.get_value(qualifier='input_sigmas', component=comp)
 
-                analytic_phases = ps.get_value(qualifier='analytic_phases', default=[], **_skip_filter_checks)
-                analytic_rvs = ps.get_value(qualifier='analytic_rvs', component=comp, default=[], unit='km/s', **_skip_filter_checks)
+                analytic_phases = ps.get_value(qualifier='analytic_phases', default=[])
+                analytic_rvs = ps.get_value(qualifier='analytic_rvs', component=comp, default=[], unit='km/s')
 
                 kwargss[i]['x'] = phases
                 kwargss[i+2]['x'] = analytic_phases
@@ -4895,14 +4911,14 @@ class ParameterSet(object):
             return kwargss
 
         elif ps.kind == 'ebai':
-            orbit = ps.get_value(qualifier='orbit', **_skip_filter_checks)
+            orbit = ps.get_value(qualifier='orbit')
             primary, secondary = self._bundle.hierarchy.get_children_of(orbit)
 
-            input_phases = ps.get_value(qualifier='input_phases', **_skip_filter_checks)
-            input_fluxes = ps.get_value(qualifier='input_fluxes', **_skip_filter_checks)
-            input_sigmas = ps.get_value(qualifier='input_sigmas', **_skip_filter_checks)
-            ebai_phases = ps.get_value(qualifier='ebai_phases', **_skip_filter_checks)
-            ebai_fluxes = ps.get_value(qualifier='ebai_fluxes', **_skip_filter_checks)
+            input_phases = ps.get_value(qualifier='input_phases')
+            input_fluxes = ps.get_value(qualifier='input_fluxes')
+            input_sigmas = ps.get_value(qualifier='input_sigmas')
+            ebai_phases = ps.get_value(qualifier='ebai_phases')
+            ebai_fluxes = ps.get_value(qualifier='ebai_fluxes')
 
             # make sure we're sorted to avoid wrapping issues
             inds = ebai_phases.argsort()
@@ -4957,7 +4973,7 @@ class ParameterSet(object):
 
                 if style=='failed':
                     kwargs.setdefault('plot_uncertainties', False)
-                    kwargs['failed_samples'] = {k: np.asarray(v)[:,adopt_inds] for k,v in ps.get_value(qualifier='failed_samples', **_skip_filter_checks).items()}
+                    kwargs['failed_samples'] = {k: np.asarray(v)[:,adopt_inds] for k,v in ps.get_value(qualifier='failed_samples').items()}
 
                 return_ += [kwargs]
 
@@ -4977,12 +4993,12 @@ class ParameterSet(object):
 
             adopt_inds, adopt_uniqueids = self._bundle._get_adopt_inds_uniqueids(ps, **kwargs)
 
-            burnin = ps.get_value(qualifier='burnin', burnin=kwargs.get('burnin', None), **_skip_filter_checks)
-            thin = ps.get_value(qualifier='thin', thin=kwargs.get('thin', None), **_skip_filter_checks)
-            lnprob_cutoff = ps.get_value(qualifier='lnprob_cutoff', lnprob_cutoff=kwargs.get('lnprob_cutoff', None), **_skip_filter_checks)
+            burnin = ps.get_value(qualifier='burnin', burnin=kwargs.get('burnin', None))
+            thin = ps.get_value(qualifier='thin', thin=kwargs.get('thin', None))
+            lnprob_cutoff = ps.get_value(qualifier='lnprob_cutoff', lnprob_cutoff=kwargs.get('lnprob_cutoff', None))
 
-            lnprobabilities = ps.get_value(qualifier='lnprobabilities', **_skip_filter_checks)
-            samples = ps.get_value(qualifier='samples', **_skip_filter_checks)
+            lnprobabilities = ps.get_value(qualifier='lnprobabilities')
+            samples = ps.get_value(qualifier='samples')
 
             styles = kwargs.get('style')
             if isinstance(styles, str):
@@ -5006,7 +5022,7 @@ class ParameterSet(object):
 
                     if style=='failed':
                         kwargs.setdefault('plot_uncertainties', False)
-                        kwargs['failed_samples'] = {k: np.asarray(v)[:,adopt_inds] for k,v in ps.get_value(qualifier='failed_samples', **_skip_filter_checks).items()}
+                        kwargs['failed_samples'] = {k: np.asarray(v)[:,adopt_inds] for k,v in ps.get_value(qualifier='failed_samples').items()}
 
                     return_ += [kwargs]
 
@@ -5025,8 +5041,8 @@ class ParameterSet(object):
                     lnprobabilities_proc[lnprobabilities_proc < lnprob_cutoff] = np.nan
 
                     if c is not None:
-                        fitted_uniqueids = self._bundle.get_value(qualifier='fitted_uniqueids', context='solution', solution=ps.solution, **_skip_filter_checks)
-                        fitted_ps = self._bundle.filter(uniqueid=list(fitted_uniqueids), **_skip_filter_checks)
+                        fitted_uniqueids = self._bundle.get_value(qualifier='fitted_uniqueids', context='solution', solution=ps.solution)
+                        fitted_ps = self._bundle.filter(uniqueid=list(fitted_uniqueids))
                         _, samples_proc_all = _helpers.process_mcmc_chains(lnprobabilities, samples, burnin, thin, -np.inf, flatten=False)
 
 
@@ -5070,8 +5086,8 @@ class ParameterSet(object):
                                 kwargs['c'] = lnprobabilities_proc[:, walker_ind]
                                 kwargs['clabel'] = _plural_to_singular_get(c)
                                 kwargs['cqualifier'] = c
-                            elif len(fitted_ps.filter(twig=c, **_skip_filter_checks).to_list()):
-                                match_params = fitted_ps.filter(twig=c, **_skip_filter_checks)
+                            elif len(fitted_ps.filter(twig=c).to_list()):
+                                match_params = fitted_ps.filter(twig=c)
                                 if len(match_params) > 1:
                                     raise ValueError("c={} matches more than one valid parameter ({})".format(c, match_params.twigs))
                                 match_param = match_params.get_parameter()
@@ -5097,10 +5113,10 @@ class ParameterSet(object):
                     kwargs_style.setdefault('marker', 'None')
                     kwargs_style.setdefault('linestyle', 'solid')
 
-                    fitted_uniqueids = self._bundle.get_value(qualifier='fitted_uniqueids', context='solution', solution=ps.solution, **_skip_filter_checks)
-                    # fitted_twigs = self._bundle.get_value(qualifier='fitted_twigs', context='solution', solution=ps.solution, **_skip_filter_checks)
-                    fitted_units = self._bundle.get_value(qualifier='fitted_units', context='solution', solution=ps.solution, **_skip_filter_checks)
-                    fitted_ps = self._bundle.filter(uniqueid=list(fitted_uniqueids), **_skip_filter_checks)
+                    fitted_uniqueids = self._bundle.get_value(qualifier='fitted_uniqueids', context='solution', solution=ps.solution)
+                    # fitted_twigs = self._bundle.get_value(qualifier='fitted_twigs', context='solution', solution=ps.solution)
+                    fitted_units = self._bundle.get_value(qualifier='fitted_units', context='solution', solution=ps.solution)
+                    fitted_ps = self._bundle.filter(uniqueid=list(fitted_uniqueids))
                     lnprobabilities_proc, samples_proc = _helpers.process_mcmc_chains(lnprobabilities, samples, burnin, thin, lnprob_cutoff, adopt_inds, flatten=False)
 
                     # samples [niters, nwalkers, parameter]
@@ -5116,7 +5132,7 @@ class ParameterSet(object):
                         # we need a list of uniqueids, including indices when necessary
                         def _uniqueids_for_y(fitted_ps, twig=None):
                             y, index = _extract_index_from_string(twig)
-                            p = fitted_ps.get_parameter(twig=y, **_skip_filter_checks)
+                            p = fitted_ps.get_parameter(twig=y)
                             if index is None:
                                 if p.__class__.__name__ == 'FloatArrayParameter':
                                     return ['{}[{}]'.format(p.uniqueid, i) for i in range(len(p.get_value()))]
@@ -5140,7 +5156,7 @@ class ParameterSet(object):
 
                         parameter_ind = list(adopt_uniqueids).index(plot_uniqueid)
                         _, index = _extract_index_from_string(plot_uniqueid)
-                        yparam = fitted_ps.get_parameter(uniqueid=plot_uniqueid, **_skip_filter_checks)
+                        yparam = fitted_ps.get_parameter(uniqueid=plot_uniqueid)
 
                         kwargs_style['x'] = np.arange(samples_proc.shape[0], dtype=float)*thin+burnin
                         kwargs_style['xlabel'] = 'iteration (burnin={}, thin={}, lnprob_cutoff={})'.format(burnin, thin, lnprob_cutoff)
@@ -5175,8 +5191,8 @@ class ParameterSet(object):
                                     kwargs['c'] = lnprobabilities_proc[:, walker_ind]
                                     kwargs['clabel'] = _plural_to_singular_get(c)
                                     kwargs['cqualifier'] = c
-                                elif len(fitted_ps.filter(twig=c, **_skip_filter_checks).to_list()):
-                                    match_params = fitted_ps.filter(twig=c, **_skip_filter_checks)
+                                elif len(fitted_ps.filter(twig=c).to_list()):
+                                    match_params = fitted_ps.filter(twig=c)
                                     if len(match_params) > 1:
                                         raise ValueError("c={} matches more than one valid parameter ({})".format(c, match_params.twigs))
                                     match_param = match_params.get_parameter()
@@ -5199,7 +5215,7 @@ class ParameterSet(object):
                 elif style in ['acf', 'trace_acf', 'acf_trace', 'lnprobabilities_acf', 'acf_lnprobabilities']:
                     # official style: trace_acf, lnprobabilities_acf
                     kwargs_style = _deepcopy(kwargs_orig)
-                    nlags = ps.get_value(qualifier='nlags', nlags=kwargs.get('nlags', None), **_skip_filter_checks)
+                    nlags = ps.get_value(qualifier='nlags', nlags=kwargs.get('nlags', None))
 
                     kwargs_style['plot_package'] = 'autofig'
                     if 'parameters' in kwargs.keys():
@@ -5208,10 +5224,10 @@ class ParameterSet(object):
                     kwargs_style.setdefault('marker', 'None')
                     kwargs_style.setdefault('linestyle', 'solid')
 
-                    fitted_uniqueids = self._bundle.get_value(qualifier='fitted_uniqueids', context='solution', solution=ps.solution, **_skip_filter_checks)
-                    # fitted_twigs = self._bundle.get_value(qualifier='fitted_twigs', context='solution', solution=ps.solution, **_skip_filter_checks)
-                    fitted_units = self._bundle.get_value(qualifier='fitted_units', context='solution', solution=ps.solution, **_skip_filter_checks)
-                    fitted_ps = self._bundle.filter(uniqueid=list(fitted_uniqueids), **_skip_filter_checks)
+                    fitted_uniqueids = self._bundle.get_value(qualifier='fitted_uniqueids', context='solution', solution=ps.solution)
+                    # fitted_twigs = self._bundle.get_value(qualifier='fitted_twigs', context='solution', solution=ps.solution)
+                    fitted_units = self._bundle.get_value(qualifier='fitted_units', context='solution', solution=ps.solution)
+                    fitted_ps = self._bundle.filter(uniqueid=list(fitted_uniqueids))
 
                     lnprobabilities_proc, samples_proc = _helpers.process_mcmc_chains(lnprobabilities, samples, burnin, 1, lnprob_cutoff, adopt_inds, flatten=False)
                     if nlags == 0:
@@ -5226,7 +5242,7 @@ class ParameterSet(object):
                         if 'lnprobabilities' not in style:
                             parameter_ind = list(adopt_uniqueids).index(plot_uniqueid)
                             _, index = _extract_index_from_string(plot_uniqueid)
-                            yparam = fitted_ps.get_parameter(uniqueid=plot_uniqueid, **_skip_filter_checks)
+                            yparam = fitted_ps.get_parameter(uniqueid=plot_uniqueid)
                         else:
                             parameter_ind = -1  # to force the lnprobability in position 0
 
@@ -5302,7 +5318,7 @@ class ParameterSet(object):
             # logger.debug("_kwargs_fill_dimension {} {} {}".format(kwargs, af_direction, ps.twigs))
             kwargs = _kwargs_fill_dimension(kwargs, af_direction, ps)
             if af_direction == 'y' and len(kwargs.get('y', np.asarray([])).shape) > 1:
-                if '-sigma' in self._bundle.get_value(qualifier='sample_mode', context='model', model=ps.model, default='none', **_skip_filter_checks):
+                if '-sigma' in self._bundle.get_value(qualifier='sample_mode', context='model', model=ps.model, default='none'):
                     kwargs['autofig_method'] = 'fill_between'
                     kwargs['y'] = np.asarray(kwargs['y'].value).T * kwargs['y'].unit
                     kwargs['yunit'] = kwargs['y'].unit
@@ -5355,12 +5371,12 @@ class ParameterSet(object):
                     raise NotImplementedError
             else:
                 if iqualifier=='times':
-                    kwargs['i'] = _handle_mask(ps, ps.get_quantity(qualifier='times', **_skip_filter_checks), **kwargs)
+                    kwargs['i'] = _handle_mask(ps, ps.get_quantity(qualifier='times'), **kwargs)
                     kwargs['iqualifier'] = 'times'
                 elif iqualifier.split(':')[0] == 'phases':
                     # TODO: need to test this
                     icomponent = iqualifier.split(':')[1] if len(iqualifier.split(':')) > 1 else None
-                    times = _handle_mask(ps, ps.get_quantity(qualifier='times', **_skip_filter_checks), **kwargs)
+                    times = _handle_mask(ps, ps.get_quantity(qualifier='times'), **kwargs)
                     # TODO: take period and t0 strings
                     kwargs['i'] = self._bundle.to_phase(times, component=icomponent)
                     kwargs['iqualifier'] = iqualifier
@@ -7089,7 +7105,7 @@ class Parameter(object):
                 children = self._bundle.hierarchy.get_children_of(d.get('component'))
 
                 latex_reprs = {}
-                for p in self._bundle.filter(qualifier='latex_repr', context='figure', **_skip_filter_checks).to_list():
+                for p in self._bundle.filter(qualifier='latex_repr', context='figure').to_list():
                     if not len(p.get_value()):
                         continue
                     if p.component is not None:
@@ -7178,7 +7194,7 @@ class Parameter(object):
 
                 parameter_uids += [param.uniqueid]
 
-        return self._bundle.filter(uniqueid=parameter_uids, **_skip_filter_checks)
+        return self._bundle.filter(uniqueid=parameter_uids)
 
     @property
     def is_visible(self, visible_if=None):
@@ -7261,9 +7277,9 @@ class Parameter(object):
             elif qualifier == 'ds_has_enabled_feature':
                 dataset = self.dataset
                 feature_kind = value
-                features_with_kind = self._bundle.filter(context='feature', kind=feature_kind, **_skip_filter_checks).features
-                enabled_features_with_kind = self._bundle.filter(qualifier='enabled', value=True, compute=self.compute, feature=features_with_kind, **_skip_filter_checks).features
-                return dataset in self._bundle.filter(context='feature', feature=enabled_features_with_kind, **_skip_filter_checks).datasets
+                features_with_kind = self._bundle.filter(context='feature', kind=feature_kind).features
+                enabled_features_with_kind = self._bundle.filter(qualifier='enabled', value=True, compute=self.compute, feature=features_with_kind).features
+                return dataset in self._bundle.filter(context='feature', feature=enabled_features_with_kind).datasets
 
             else:
 
@@ -10126,20 +10142,20 @@ class FloatArrayParameter(FloatParameter):
         if isinstance(qualifier_interp_value, str):
             # then assume its a twig and try to resolve
             # for example: time='t0_supconj'
-            qualifier_interp_value = bundle.get_value(qualifier=qualifier_interp_value, context=['system', 'component'], **_skip_filter_checks)
+            qualifier_interp_value = bundle.get_value(qualifier=qualifier_interp_value, context=['system', 'component'])
 
 
         if qualifier not in parent_ps.qualifiers and not (qualifier=='phases' and 'times' in parent_ps.qualifiers):
             raise KeyError("'{}' not valid qualifier (must be one of {})".format(qualifier, parent_ps.qualifiers))
 
         if isinstance(qualifier_interp_value, u.Quantity):
-            default_unit = parent_ps.get_parameter(qualifier=qualifier, **_skip_filter_checks).default_unit
+            default_unit = parent_ps.get_parameter(qualifier=qualifier).default_unit
             logger.info("converting from provided quantity with units {} to default units ({}) of {}".format(qualifier_interp_value.unit, default_unit, qualifier))
             qualifier_interp_value = qualifier_interp_value.to(default_unit).value
 
         if qualifier=='times':
             # TODO: do we need to worry about units here?
-            times = parent_ps.get_value(qualifier='times', **_skip_filter_checks)
+            times = parent_ps.get_value(qualifier='times')
             if np.any(qualifier_interp_value < times.min()) or np.any(qualifier_interp_value > times.max()):
                 qualifier_interp_value_time = qualifier_interp_value
                 qualifier = 'phases'
@@ -10155,7 +10171,7 @@ class FloatArrayParameter(FloatParameter):
             if self.context != 'model':
                 raise NotImplementedError("only 1D arrays supported unless in context='model' with sample_mode='n-sigma'")
             # do we want bundle or parent_ps here (for the case where doing scaling from run_compute)
-            sample_mode = bundle.get_value(qualifier='sample_mode', context='model', model=self.model, default='none', **_skip_filter_checks)
+            sample_mode = bundle.get_value(qualifier='sample_mode', context='model', model=self.model, default='none')
             if '-sigma' in sample_mode:
                 logger.info("using median for interpolation for sample_mode='{}'".format(sample_mode))
                 self_value = self_value[1]
@@ -10169,7 +10185,7 @@ class FloatArrayParameter(FloatParameter):
             if bundle.hierarchy.is_time_dependent(consider_gaussian_process=consider_gaussian_process):
                 raise ValueError("cannot interpolate in phase for time-dependent systems")
 
-            times = parent_ps.get_value(qualifier='times', **_skip_filter_checks)
+            times = parent_ps.get_value(qualifier='times')
             phases = bundle.to_phase(times, component=component, period=period, dpdt=dpdt, t0=t0)
 
             sort = phases.argsort()
@@ -11314,7 +11330,7 @@ class HierarchyParameter(StringParameter):
                     return True
 
         # TODO: allow passing compute to do only enabled features attached to enabled datasets?
-        if consider_gaussian_process and len(self._bundle.filter(kind=['gp_sklearn', 'gp_celerite2'], context='feature', **_skip_filter_checks).features):
+        if consider_gaussian_process and len(self._bundle.filter(kind=['gp_sklearn', 'gp_celerite2'], context='feature').features):
             return True
 
         return False
@@ -11479,7 +11495,7 @@ class ConstraintParameter(Parameter):
 
         if self.qualifier:
             #~ print "***", self._bundle.__repr__(), self.qualifier, self.component
-            ps = self._bundle.exclude(context='constraint', **_skip_filter_checks).filter(qualifier=self.qualifier, component=self.component, dataset=self.dataset, feature=self.feature, model=self.model, **_skip_filter_checks)
+            ps = self._bundle.exclude(context='constraint').filter(qualifier=self.qualifier, component=self.component, dataset=self.dataset, feature=self.feature, model=self.model)
             if len(ps) == 1:
                 constrained_parameter = ps.get_parameter(**_skip_filter_checks)
             else:
@@ -12362,7 +12378,7 @@ class JobParameter(Parameter):
     def _crimpl_server(self):
         if self._cached_crimpl_server is None:
             if self._server is not None:
-                crimpl_name = self._bundle.get_value(qualifier='crimpl_name', server=self._server, **_skip_filter_checks)
+                crimpl_name = self._bundle.get_value(qualifier='crimpl_name', server=self._server)
             else:
                 crimpl_name = ''
             if crimpl_name in _cached_crimpl_servers.keys():
@@ -12389,7 +12405,7 @@ class JobParameter(Parameter):
         [NOT IMPLEMENTED]
         """
         if self._server is not None:
-            crimpl_name = self._bundle.get_value(qualifier='crimpl_name', server=self._server, **_skip_filter_checks)
+            crimpl_name = self._bundle.get_value(qualifier='crimpl_name', server=self._server)
         else:
             crimpl_name = ''
 
@@ -12470,7 +12486,7 @@ class JobParameter(Parameter):
             raise NotImplementedError("attaching for context='{}' not implemented".format(self.context))
 
         if 'progress' in self._value:
-            if ret_ps.get_value(qualifier='progress', default=0, **_skip_filter_checks) == self._bundle.get_value(qualifier='progress', default=100, check_visible=False, check_advanced=False, **metawargs):
+            if ret_ps.get_value(qualifier='progress', default=0) == self._bundle.get_value(qualifier='progress', default=100, check_visible=False, check_advanced=False, **metawargs):
                 # then we have nothing new to load, so let's not bother attaching and overwriting with the exact same thing
                 return ParameterSet([])
             elif 'progress' in ret_ps.qualifiers:

@@ -209,7 +209,7 @@ def phase_mask_inds(phases, mask_phases):
 
 def _get_masked_times(b, dataset, mask_phases, mask_t0, return_times_phases=False):
     # concatenate for the case of datasets (like RVs) with times in multiple components
-    times = np.unique(np.concatenate([time_param.get_value() for time_param in b.filter(qualifier='times', dataset=dataset, **_skip_filter_checks).to_list()]))
+    times = np.unique(np.concatenate([time_param.get_value() for time_param in b.filter(qualifier='times', dataset=dataset).to_list()]))
     phases = b.to_phases(times, t0=mask_t0)
     masked_times = times[phase_mask_inds(phases, mask_phases)]
     if return_times_phases:
@@ -220,11 +220,11 @@ def _get_masked_compute_times(b, dataset, mask_phases, mask_t0, is_time_dependen
     # for compute_times/phases we can't just mask because we need to make
     # sure we "surround" each of the observation datapoints
     if times is None:
-        times = np.unique(np.concatenate([time_param.get_value() for time_param in b.filter(qualifier='times', dataset=dataset, unit='d', **_skip_filter_checks).to_list()]))
+        times = np.unique(np.concatenate([time_param.get_value() for time_param in b.filter(qualifier='times', dataset=dataset, unit='d').to_list()]))
     if phases is None:
         phases = b.to_phases(times, t0=mask_t0)
 
-    compute_times = b.get_value(qualifier='compute_times', dataset=dataset, context='dataset', unit='d', **_skip_filter_checks)
+    compute_times = b.get_value(qualifier='compute_times', dataset=dataset, context='dataset', unit='d')
 
     if mask_phases is None:
         return compute_times

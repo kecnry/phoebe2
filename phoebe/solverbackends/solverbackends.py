@@ -75,7 +75,7 @@ def _wrap_central_values(b, dc, uniqueids):
     ret = {}
     for dist, uniqueid_orig in zip(dc.dists, uniqueids):
         uniqueid, index = _extract_index_from_string(uniqueid_orig)
-        param = b.get_parameter(uniqueid=uniqueid, **_skip_filter_checks)
+        param = b.get_parameter(uniqueid=uniqueid)
         if param.default_unit.physical_type == 'angle':
             ret[uniqueid_orig] = dist.median()
     return ret
@@ -85,10 +85,10 @@ def _bsolver(b, solver, compute, distributions, wrap_central_values={}):
     # TODO: re-enable removing unused compute options - currently causes some constraints to fail
     # TODO: is it quicker to initialize a new bundle around b.exclude?  Or just leave everything?
     bexcl = b.copy()
-    bexcl.remove_parameters_all(context=['model', 'solution', 'figure'], **_skip_filter_checks)
+    bexcl.remove_parameters_all(context=['model', 'solution', 'figure'])
     if len(b.solvers) > 1:
-        bexcl.remove_parameters_all(solver=[f for f in b.solvers if f!=solver and solver is not None], **_skip_filter_checks)
-    bexcl.remove_parameters_all(distribution=[d for d in b.distributions if d not in distributions], **_skip_filter_checks)
+        bexcl.remove_parameters_all(solver=[f for f in b.solvers if f!=solver and solver is not None])
+    bexcl.remove_parameters_all(distribution=[d for d in b.distributions if d not in distributions])
 
     # any dataset type supported for fitting needs to NOT be excluded here and
     # also implemented in parameters.ParameterSet.calculate_residuals
@@ -97,7 +97,7 @@ def _bsolver(b, solver, compute, distributions, wrap_central_values={}):
     # set face-values to be central values for any angle parameters in init_from
     for uniqueid, value in wrap_central_values.items():
         # TODO: what to do if continue_from was used but constraint has since been flipped?
-        bexcl.set_value(uniqueid=uniqueid, value=value, **_skip_filter_checks)
+        bexcl.set_value(uniqueid=uniqueid, value=value)
 
     bexcl.parse_solver_times(return_as_dict=False, set_compute_times=True)
 
@@ -146,9 +146,9 @@ def _lnprobability(sampled_values, b, params_uniqueids, compute,
             uniqueid, index = _extract_index_from_string(uniqueid)
             try:
                 if index is not None:
-                    b.get_parameter(uniqueid=uniqueid, **_skip_filter_checks).set_index_value(index=index, value=value, run_checks=False, run_constraints=False)
+                    b.get_parameter(uniqueid=uniqueid).set_index_value(index=index, value=value, run_checks=False, run_constraints=False)
                 else:
-                    b.set_value(uniqueid=uniqueid, value=value, run_checks=False, run_constraints=False, **_skip_filter_checks)
+                    b.set_value(uniqueid=uniqueid, value=value, run_checks=False, run_constraints=False)
             except ValueError as err:
                 logger.warning("received error while setting values: {}. lnprobability=-inf".format(err))
                 return _return(-np.inf, str(err))
@@ -228,18 +228,18 @@ def _get_combined_lc(b, datasets, combine, phase_component=None, mask=True, norm
     sigmas = np.array([])
 
     for dataset in datasets:
-        lc_ps = b.get_dataset(dataset=dataset, **_skip_filter_checks)
-        ds_fluxes = lc_ps.get_value(qualifier='fluxes', unit=u.W/u.m**2, **_skip_filter_checks)
+        lc_ps = b.get_dataset(dataset=dataset)
+        ds_fluxes = lc_ps.get_value(qualifier='fluxes', unit=u.W/u.m**2)
 
         if not len(ds_fluxes):
             # then no observations here
             continue
 
-        ds_times = lc_ps.get_value(qualifier='times', unit=u.d, **_skip_filter_checks)
+        ds_times = lc_ps.get_value(qualifier='times', unit=u.d)
         if len(ds_times) != len(ds_fluxes):
             raise ValueError("times and fluxes in dataset '{}' do not have same length".format(dataset))
 
-        ds_sigmas = lc_ps.get_value(qualifier='sigmas', unit=u.W/u.m**2, **_skip_filter_checks)
+        ds_sigmas = lc_ps.get_value(qualifier='sigmas', unit=u.W/u.m**2)
 
         if len(ds_sigmas) == 0:
             # TODO: option for this???
@@ -272,13 +272,13 @@ def _get_combined_lc(b, datasets, combine, phase_component=None, mask=True, norm
             ds_fluxes /= flux_norm
             ds_sigmas /= flux_norm
 
-        mask_enabled = lc_ps.get_value(qualifier='mask_enabled', default=False, **_skip_filter_checks)
+        mask_enabled = lc_ps.get_value(qualifier='mask_enabled', default=False)
         if mask and mask_enabled:
-            mask_phases = lc_ps.get_value(qualifier='mask_phases', **_skip_filter_checks)
+            mask_phases = lc_ps.get_value(qualifier='mask_phases')
             if len(mask_phases):
                 if warn_mask:
                     logger.warning("applying mask_phases (may not be desired for finding eclipse edges - set mask_enabled=False to disable)")
-                mask_t0 = lc_ps.get_value(qualifier='phases_t0', **_skip_filter_checks)
+                mask_t0 = lc_ps.get_value(qualifier='phases_t0')
                 # TODO:
                 phases_for_mask = b.to_phase(ds_times, component=None, t0=mask_t0)
 
@@ -337,26 +337,26 @@ def _get_combined_rv(b, datasets, components, phase_component=None, mask=True, n
         c_sigmas = np.array([])
 
         for dataset in datasets:
-            rvc_ps = b.get_dataset(dataset=dataset, component=comp, **_skip_filter_checks)
-            rvc_rvs = rvc_ps.get_value(qualifier='rvs', unit=u.km/u.s, **_skip_filter_checks)
+            rvc_ps = b.get_dataset(dataset=dataset, component=comp)
+            rvc_rvs = rvc_ps.get_value(qualifier='rvs', unit=u.km/u.s)
             if not len(rvc_rvs):
                 # then no observations here
                 continue
 
-            rvc_times = rvc_ps.get_value(qualifier='times', unit=u.d, **_skip_filter_checks)
+            rvc_times = rvc_ps.get_value(qualifier='times', unit=u.d)
             if len(rvc_rvs) != len(rvc_times):
                 raise ValueError("rv@{}@{} does not match length of times@{}@{}".format(comp, dataset, comp, dataset))
 
-            rvc_sigmas = rvc_ps.get_value(qualifier='sigmas', unit=u.km/u.s, **_skip_filter_checks)
+            rvc_sigmas = rvc_ps.get_value(qualifier='sigmas', unit=u.km/u.s)
             if not len(rvc_sigmas):
                 rvc_sigmas = np.full_like(rvc_rvs, fill_value=np.nan)
 
-            mask_enabled = b.get_value(qualifier='mask_enabled', dataset=dataset, default=False, **_skip_filter_checks)
+            mask_enabled = b.get_value(qualifier='mask_enabled', dataset=dataset, default=False)
             if mask and mask_enabled:
-                mask_phases = b.get_value(qualifier='mask_phases', dataset=dataset, **_skip_filter_checks)
+                mask_phases = b.get_value(qualifier='mask_phases', dataset=dataset)
                 if len(mask_phases):
                     logger.warning("applying mask_phases - set mask_enabled=False to disable")
-                    mask_t0 = b.get_value(qualifier='phases_t0', dataset=dataset, **_skip_filter_checks)
+                    mask_t0 = b.get_value(qualifier='phases_t0', dataset=dataset)
                     phases_for_mask = b.to_phase(rvc_times, component=None, t0=mask_t0)
 
                     inds = phase_mask_inds(phases_for_mask, mask_phases)
@@ -482,7 +482,7 @@ class BaseSolverBackend(object):
         * backend: the class name will be passed on in the packet so the worker can call the correct backend
         * all kwargs will be passed on verbatim
         """
-        solver_ps = b.get_solver(solver=solver, **_skip_filter_checks)
+        solver_ps = b.get_solver(solver=solver)
         for param in solver_ps.to_list():
             # we need to make sure SelectParameters are expanded correctly if sent through kwargs
             kwargs[param.qualifier] = param.get_value(expand=True, unit='solar', **{param.qualifier: kwargs.get(param.qualifier, None)})
@@ -584,7 +584,7 @@ class Lc_GeometryBackend(BaseSolverBackend):
     * <phoebe.frontend.bundle.Bundle.run_solver>
     """
     def run_checks(self, b, solver, compute, **kwargs):
-        solver_ps = b.get_solver(solver, **_skip_filter_checks)
+        solver_ps = b.get_solver(solver)
         if not len(solver_ps.get_value(qualifier='lc_datasets', expand=True, lc_datasets=kwargs.get('lc_datasets', None))):
             raise ValueError("cannot run lc_geometry without any dataset in lc_datasets")
 
@@ -638,15 +638,15 @@ class Lc_GeometryBackend(BaseSolverBackend):
 
         times, phases, fluxes, sigmas = _get_combined_lc(b, lc_datasets, lc_combine, phase_component=orbit, mask=True, normalize=True, phase_sorted=True, phase_bin=phase_bin, warn_mask=True)
 
-        orbit_ps = b.get_component(component=orbit, **_skip_filter_checks)
-        ecc_param = orbit_ps.get_parameter(qualifier='ecc', **_skip_filter_checks)
-        per0_param = orbit_ps.get_parameter(qualifier='per0', **_skip_filter_checks)
-        t0_supconj_param = orbit_ps.get_parameter(qualifier='t0_supconj', **_skip_filter_checks)
-        rsum_param = orbit_ps.get_parameter(qualifier='requivsumfrac', **_skip_filter_checks)
-        teffratio_param = orbit_ps.get_parameter(qualifier='teffratio', **_skip_filter_checks)
+        orbit_ps = b.get_component(component=orbit)
+        ecc_param = orbit_ps.get_parameter(qualifier='ecc')
+        per0_param = orbit_ps.get_parameter(qualifier='per0')
+        t0_supconj_param = orbit_ps.get_parameter(qualifier='t0_supconj')
+        rsum_param = orbit_ps.get_parameter(qualifier='requivsumfrac')
+        teffratio_param = orbit_ps.get_parameter(qualifier='teffratio')
 
-        period = orbit_ps.get_value(qualifier='period', **_skip_filter_checks)
-        t0_supconj_old = orbit_ps.get_value(qualifier='t0_supconj', **_skip_filter_checks)
+        period = orbit_ps.get_value(qualifier='period')
+        t0_supconj_old = orbit_ps.get_value(qualifier='t0_supconj')
 
         interactive = kwargs.get('interactive', False)
         analytical_model = kwargs.get('analytical_model', 'two-gaussian')
@@ -663,8 +663,8 @@ class Lc_GeometryBackend(BaseSolverBackend):
         if fit_eclipses:
             try:
                 import ellc
-                rratio_param = orbit_ps.get_parameter(qualifier='requivratio', **_skip_filter_checks)
-                incl_param = orbit_ps.get_parameter(qualifier='incl@binary', **_skip_filter_checks)
+                rratio_param = orbit_ps.get_parameter(qualifier='requivratio')
+                incl_param = orbit_ps.get_parameter(qualifier='incl@binary')
                 fitted_params += [rratio_param, incl_param]
             except:
                 raise ImportError('ellc needs to be installed to refine the fit when fit_eclipses = True')
@@ -676,7 +676,7 @@ class Lc_GeometryBackend(BaseSolverBackend):
 
         edges = eclipse_dict.get('eclipse_edges')
         mask_phases = [(edges[0]-eclipse_dict.get('primary_width')*0.3, edges[1]+eclipse_dict.get('primary_width')*0.3), (edges[2]-eclipse_dict.get('secondary_width')*0.3, edges[3]+eclipse_dict.get('secondary_width')*0.3)]
-        fitted_params += b.filter(qualifier='mask_phases', dataset=lc_datasets, **_skip_filter_checks).to_list()
+        fitted_params += b.filter(qualifier='mask_phases', dataset=lc_datasets).to_list()
 
         fitted_uniqueids = [p.uniqueid for p in fitted_params]
         fitted_twigs = [p.twig for p in fitted_params]
@@ -736,7 +736,7 @@ class Rv_GeometryBackend(BaseSolverBackend):
     * <phoebe.frontend.bundle.Bundle.run_solver>
     """
     def run_checks(self, b, solver, compute, **kwargs):
-        solver_ps = b.get_solver(solver=solver, **_skip_filter_checks)
+        solver_ps = b.get_solver(solver=solver)
         if not len(solver_ps.get_value(qualifier='rv_datasets', expand=True, rv_datasets=kwargs.get('rv_datasets', None))):
             raise ValueError("cannot run rv_geometry without any dataset in rv_datasets")
 
@@ -804,7 +804,7 @@ class Rv_GeometryBackend(BaseSolverBackend):
         if rv1data is None and rv2data is None:
             raise ValueError("no rv data found, cannot run rv_geometry")
 
-        period = b.get_value(qualifier='period', component=orbit, context='component', unit=u.d, **_skip_filter_checks)
+        period = b.get_value(qualifier='period', component=orbit, context='component', unit=u.d)
 
         est_dict = rv_geometry.estimate_rv_parameters(rv1data, rv2data)
         est_dict['t0_supconj'] = b.to_time(est_dict['ph_supconj'], component=orbit, t0='t0_supconj')
@@ -817,17 +817,17 @@ class Rv_GeometryBackend(BaseSolverBackend):
         # est_dict['ecc']
         # est_dict['per0']
 
-        orbit_ps = b.get_component(component=orbit, **_skip_filter_checks)
+        orbit_ps = b.get_component(component=orbit)
 
-        t0_supconj_param = orbit_ps.get_parameter(qualifier='t0_supconj', **_skip_filter_checks)
-        ecc_param = orbit_ps.get_parameter(qualifier='ecc', **_skip_filter_checks)
-        per0_param = orbit_ps.get_parameter(qualifier='per0', **_skip_filter_checks)
+        t0_supconj_param = orbit_ps.get_parameter(qualifier='t0_supconj')
+        ecc_param = orbit_ps.get_parameter(qualifier='ecc')
+        per0_param = orbit_ps.get_parameter(qualifier='per0')
 
-        vgamma_param = b.get_parameter(qualifier='vgamma', context='system', **_skip_filter_checks)
+        vgamma_param = b.get_parameter(qualifier='vgamma', context='system')
 
         if rv2data is None:
             # then we have an SB1 system with only primary RVs
-            asini_param = b.get_parameter(qualifier='asini', component=starrefs[0], context='component', **_skip_filter_checks)
+            asini_param = b.get_parameter(qualifier='asini', component=starrefs[0], context='component')
 
             fitted_params = [t0_supconj_param, asini_param, ecc_param, per0_param, vgamma_param]
             fitted_values = [est_dict.get(p.qualifier) if p.qualifier != 'asini' else est_dict.get('asini')[0]*period for p in fitted_params]
@@ -835,7 +835,7 @@ class Rv_GeometryBackend(BaseSolverBackend):
 
         elif rv1data is None:
             # then we have an SB1 system with only secondary RVs
-            asini_param = b.get_parameter(qualifier='asini', component=starrefs[1], context='component', **_skip_filter_checks)
+            asini_param = b.get_parameter(qualifier='asini', component=starrefs[1], context='component')
 
             fitted_params = [t0_supconj_param, asini_param, ecc_param, per0_param, vgamma_param]
             fitted_values = [est_dict.get(p.qualifier) if p.qualifier != 'asini' else est_dict.get('asini')[1]*period for p in fitted_params]
@@ -843,8 +843,8 @@ class Rv_GeometryBackend(BaseSolverBackend):
 
         else:
             # then we have an SB2 system
-            asini_param = orbit_ps.get_parameter(qualifier='asini', **_skip_filter_checks)
-            q_param = orbit_ps.get_parameter(qualifier='q', **_skip_filter_checks)
+            asini_param = orbit_ps.get_parameter(qualifier='asini')
+            q_param = orbit_ps.get_parameter(qualifier='q')
 
             fitted_params = [t0_supconj_param, q_param, asini_param, ecc_param, per0_param, vgamma_param]
             fitted_values = [est_dict.get(p.qualifier) if p.qualifier != 'asini' else np.nansum(est_dict.get('asini'))*period for p in fitted_params]
@@ -991,7 +991,7 @@ class _PeriodogramBaseBackend(BaseSolverBackend):
 
         period = periods[peak_ind]
 
-        period_param = b.get_parameter(qualifier='period', component=component, context='component', **_skip_filter_checks)
+        period_param = b.get_parameter(qualifier='period', component=component, context='component')
 
         params_twigs = [period_param.twig]
 
@@ -1016,7 +1016,7 @@ class Lc_PeriodogramBackend(_PeriodogramBaseBackend):
         if not _use_astropy_timeseries:
             raise ImportError("astropy.timeseries not installed (requires astropy 3.2+). Update astropy and restart phoebe.")
 
-        solver_ps = b.get_solver(solver=solver, **_skip_filter_checks)
+        solver_ps = b.get_solver(solver=solver)
         if not len(solver_ps.get_value(qualifier='lc_datasets', expand=True, lc_datasets=kwargs.get('lc_datasets', None))):
             raise ValueError("cannot run lc_periodogram without any dataset in lc_datasets")
 
@@ -1038,7 +1038,7 @@ class Rv_PeriodogramBackend(_PeriodogramBaseBackend):
         if not _use_astropy_timeseries:
             raise ImportError("astropy.timeseries not installed (requires astropy 3.2+).  Update astropy and restart phoebe.")
 
-        solver_ps = b.get_solver(solver=solver, **_skip_filter_checks)
+        solver_ps = b.get_solver(solver=solver)
         if not len(solver_ps.get_value(qualifier='rv_datasets', expand=True, rv_datasets=kwargs.get('rv_datasets', None))):
             raise ValueError("cannot run rv_periodogram without any dataset in rv_datasets")
 
@@ -1063,7 +1063,7 @@ class Rv_PeriodogramBackend(_PeriodogramBaseBackend):
 #     * <phoebe.frontend.bundle.Bundle.run_solver>
 #     """
 #     def run_checks(self, b, solver, compute, **kwargs):
-#         solver_ps = b.get_solver(solver=solver, **_skip_filter_checks)
+#         solver_ps = b.get_solver(solver=solver)
 #         if not len(solver_ps.get_value(qualifier='lc_datasets', expand=True, lc_datasets=kwargs.get('lc_datasets', None))):
 #             raise ValueError("cannot run ebai without any dataset in lc_datasets")
 
@@ -1101,7 +1101,7 @@ class Rv_PeriodogramBackend(_PeriodogramBaseBackend):
 #         lc_combine = kwargs.get('lc_combine')
 #         orbit = kwargs.get('orbit')
 
-#         orbit_ps = b.get_component(component=orbit, **_skip_filter_checks)
+#         orbit_ps = b.get_component(component=orbit)
 
 #         phase_bin = kwargs.get('phase_bin', False)
 #         if phase_bin:
@@ -1109,12 +1109,12 @@ class Rv_PeriodogramBackend(_PeriodogramBaseBackend):
 
 #         times, phases, fluxes, sigmas = _get_combined_lc(b, lc_datasets, lc_combine, phase_component=orbit, mask=True, normalize=True, phase_sorted=True, phase_bin=phase_bin)
 
-#         teffratio_param = orbit_ps.get_parameter(qualifier='teffratio', **_skip_filter_checks)
-#         requivsumfrac_param = orbit_ps.get_parameter(qualifier='requivsumfrac', **_skip_filter_checks)
-#         esinw_param = orbit_ps.get_parameter(qualifier='esinw', **_skip_filter_checks)
-#         ecosw_param = orbit_ps.get_parameter(qualifier='ecosw', **_skip_filter_checks)
-#         incl_param = orbit_ps.get_parameter(qualifier='incl', **_skip_filter_checks)
-#         t0_supconj_param = orbit_ps.get_parameter(qualifier='t0_supconj', **_skip_filter_checks)
+#         teffratio_param = orbit_ps.get_parameter(qualifier='teffratio')
+#         requivsumfrac_param = orbit_ps.get_parameter(qualifier='requivsumfrac')
+#         esinw_param = orbit_ps.get_parameter(qualifier='esinw')
+#         ecosw_param = orbit_ps.get_parameter(qualifier='ecosw')
+#         incl_param = orbit_ps.get_parameter(qualifier='incl')
+#         t0_supconj_param = orbit_ps.get_parameter(qualifier='t0_supconj')
 
 #         # TODO: cleanup this logic a bit
 #         lc_geom_dict = lc_geometry.estimate_eclipse_positions_widths(phases, fluxes)
@@ -1147,7 +1147,7 @@ class Rv_PeriodogramBackend(_PeriodogramBaseBackend):
 #             ebai_fluxes /= ebai_fluxes.max()
 
 #             # update to t0_supconj based on pshift
-#             t0_supconj = t0_supconj_param.get_value(unit=u.d) + (pshift * orbit_ps.get_value(qualifier='period', unit=u.d, **_skip_filter_checks))
+#             t0_supconj = t0_supconj_param.get_value(unit=u.d) + (pshift * orbit_ps.get_value(qualifier='period', unit=u.d))
 
 #             # run ebai on polyfit sampled fluxes
 #             teffratio, requivsumfrac, esinw, ecosw, sini = ebai_forward(ebai_fluxes)
@@ -1180,7 +1180,7 @@ class EbaiBackend(BaseSolverBackend):
     * <phoebe.frontend.bundle.Bundle.run_solver>
     """
     def run_checks(self, b, solver, compute, **kwargs):
-        solver_ps = b.get_solver(solver=solver, **_skip_filter_checks)
+        solver_ps = b.get_solver(solver=solver)
         if not len(solver_ps.get_value(qualifier='lc_datasets', expand=True, lc_datasets=kwargs.get('lc_datasets', None))):
             raise ValueError("cannot run ebai without any dataset in lc_datasets")
 
@@ -1217,24 +1217,24 @@ class EbaiBackend(BaseSolverBackend):
         lc_datasets = kwargs.get('lc_datasets') # NOTE: already expanded
         lc_combine = kwargs.get('lc_combine')
         orbit = kwargs.get('orbit')
-        orbit_ps = b.get_component(component=orbit, **_skip_filter_checks)
+        orbit_ps = b.get_component(component=orbit)
 
         morphology = 'detached' if len(b.hierarchy.get_envelopes()) == 0 else 'contact'
 
-        t0_supconj_param = orbit_ps.get_parameter(qualifier='t0_supconj', **_skip_filter_checks)
-        incl_param = orbit_ps.get_parameter(qualifier='incl', **_skip_filter_checks)
-        teffratio_param = orbit_ps.get_parameter(qualifier='teffratio', **_skip_filter_checks)
+        t0_supconj_param = orbit_ps.get_parameter(qualifier='t0_supconj')
+        incl_param = orbit_ps.get_parameter(qualifier='incl')
+        teffratio_param = orbit_ps.get_parameter(qualifier='teffratio')
 
         if morphology == 'detached':
-            requivsumfrac_param = orbit_ps.get_parameter(qualifier='requivsumfrac', **_skip_filter_checks)
-            esinw_param = orbit_ps.get_parameter(qualifier='esinw', **_skip_filter_checks)
-            ecosw_param = orbit_ps.get_parameter(qualifier='ecosw', **_skip_filter_checks)
+            requivsumfrac_param = orbit_ps.get_parameter(qualifier='requivsumfrac')
+            esinw_param = orbit_ps.get_parameter(qualifier='esinw')
+            ecosw_param = orbit_ps.get_parameter(qualifier='ecosw')
         else:
             envelope = kwargs.get('contact_envelope')
-            envelope_ps = b.get_component(component=envelope, **_skip_filter_checks)
+            envelope_ps = b.get_component(component=envelope)
 
-            ff_param = envelope_ps.get_parameter(qualifier='fillout_factor', **_skip_filter_checks)
-            q_param = orbit_ps.get_parameter(qualifier='q', **_skip_filter_checks)
+            ff_param = envelope_ps.get_parameter(qualifier='fillout_factor')
+            q_param = orbit_ps.get_parameter(qualifier='q')
 
         phase_bin = kwargs.get('phase_bin', False)
         if phase_bin:
@@ -1269,7 +1269,7 @@ class EbaiBackend(BaseSolverBackend):
         ebai_fluxes = lcModel.compute_model(ebai_phases, best_fit=True)
         ebai_phases[0] = - 0.5
         # update to t0_supconj based on pshift
-        t0_supconj = t0_supconj_param.get_value(unit=u.d) + (pshift * orbit_ps.get_value(qualifier='period', unit=u.d, **_skip_filter_checks))
+        t0_supconj = t0_supconj_param.get_value(unit=u.d) + (pshift * orbit_ps.get_value(qualifier='period', unit=u.d))
 
         if ebai_method == 'knn':
             path = os.path.abspath(__file__)
@@ -1360,15 +1360,15 @@ class EmceeBackend(BaseSolverBackend):
             # see https://github.com/phoebe-project/phoebe2/issues/378
             raise ImportError("emcee backend requires a stable release of emcee 3.0+, {} found.  Update emcee and restart phoebe.".format(emcee.__version__))
 
-        solver_ps = b.get_solver(solver=solver, **_skip_filter_checks)
-        if not len(solver_ps.get_value(qualifier='init_from', init_from=kwargs.get('init_from', None), **_skip_filter_checks)) and solver_ps.get_value(qualifier='continue_from', continue_from=kwargs.get('continue_from', None), **_skip_filter_checks)=='None':
+        solver_ps = b.get_solver(solver=solver)
+        if not len(solver_ps.get_value(qualifier='init_from', init_from=kwargs.get('init_from', None))) and solver_ps.get_value(qualifier='continue_from', continue_from=kwargs.get('continue_from', None))=='None':
             raise ValueError("cannot run emcee without any distributions in init_from")
 
         # require sigmas for all enabled datasets
         datasets = b.filter(compute=compute, qualifier='enabled', value=True).datasets
         for sigma_param in b.filter(qualifier='sigmas', dataset=datasets, context='dataset', check_visible=True, check_default=True).to_list():
             if not len(sigma_param.get_value()):
-                times = b.get_value(qualifier='times', dataset=sigma_param.dataset, component=sigma_param.component, context='dataset', **_skip_filter_checks)
+                times = b.get_value(qualifier='times', dataset=sigma_param.dataset, component=sigma_param.component, context='dataset')
                 if len(times):
                     raise ValueError("emcee requires sigmas for all datasets where times exist (not found for {})".format(sigma_param.twig))
 
@@ -1458,16 +1458,16 @@ class EmceeBackend(BaseSolverBackend):
             global failed_samples_buffer
             failed_samples_buffer = []
 
-            compute_kind = b.get_compute(compute=compute, **_skip_filter_checks).kind
+            compute_kind = b.get_compute(compute=compute).kind
             supports_per_time = False
             if compute_kind == 'phoebe':
                 # check to see if any of the enabled datasets support per-time parallelization
-                enabled_datasets = b.filter(qualifier='enabled', compute=compute, context='compute', value=True, **_skip_filter_checks).datasets
-                enabled_dataset_kinds = b.filter(dataset=enabled_datasets, context='dataset', **_skip_filter_checks).kinds
+                enabled_datasets = b.filter(qualifier='enabled', compute=compute, context='compute', value=True).datasets
+                enabled_dataset_kinds = b.filter(dataset=enabled_datasets, context='dataset').kinds
 
                 if 'lc' in enabled_dataset_kinds or 'lp' in enabled_dataset_kinds:
                     supports_per_time = True
-                elif 'rv' in enabled_dataset_kinds and 'flux-weighted' in [p.get_value() for p in b.filter(qualifier='rv_method', compute=compute, dataset=enabled_datasets, context='compute', **_skip_filter_checks).to_list()]:
+                elif 'rv' in enabled_dataset_kinds and 'flux-weighted' in [p.get_value() for p in b.filter(qualifier='rv_method', compute=compute, dataset=enabled_datasets, context='compute').to_list()]:
                     supports_per_time = True
                 # otherwise we just have orbits and/or dynamical RVs, so we'll leave supports_per_time=False
 
@@ -1567,7 +1567,7 @@ class EmceeBackend(BaseSolverBackend):
                                                                             )
 
                 params_uniqueids_and_indices = [_extract_index_from_string(uid) for uid in params_uniqueids]
-                params_twigs = [_to_twig_with_index(b.get_parameter(uniqueid=uniqueid, **_skip_filter_checks).twig, index) for uniqueid, index in params_uniqueids_and_indices]
+                params_twigs = [_to_twig_with_index(b.get_parameter(uniqueid=uniqueid).twig, index) for uniqueid, index in params_uniqueids_and_indices]
 
                 wrap_central_values = _wrap_central_values(b, dc, params_uniqueids)
                 params_units = [dist.unit.to_string() for dist in dc.dists]
@@ -1577,16 +1577,16 @@ class EmceeBackend(BaseSolverBackend):
             else:
                 # ignore the value from init_from (hidden parameter)
                 init_from = []
-                continue_from_ps = kwargs.get('continue_from_ps', b.filter(context='solution', solution=continue_from, **_skip_filter_checks))
-                wrap_central_values = continue_from_ps.get_value(qualifier='wrap_central_values', **_skip_filter_checks)
-                params_uniqueids = continue_from_ps.get_value(qualifier='fitted_uniqueids', **_skip_filter_checks)
+                continue_from_ps = kwargs.get('continue_from_ps', b.filter(context='solution', solution=continue_from))
+                wrap_central_values = continue_from_ps.get_value(qualifier='wrap_central_values')
+                params_uniqueids = continue_from_ps.get_value(qualifier='fitted_uniqueids')
 
                 if not np.all([uniqueid.split('[')[0] in b.uniqueids for uniqueid in params_uniqueids]):
                     logger.info("continue_from uniqueid matches not found, falling back on twigs")
-                    params_twigs = continue_from_ps.get_value(qualifier='fitted_twigs', **_skip_filter_checks)
+                    params_twigs = continue_from_ps.get_value(qualifier='fitted_twigs')
                     original_params_uniqueids = list(params_uniqueids)
                     params_twigs_and_indices = [_extract_index_from_string(t) for t in params_twigs]
-                    params_uniqueids = [_to_uniqueid_with_index(b.get_parameter(twig=twig, **_skip_filter_checks).uniqueid, index) for twig, index in params_twigs_and_indices]
+                    params_uniqueids = [_to_uniqueid_with_index(b.get_parameter(twig=twig).uniqueid, index) for twig, index in params_twigs_and_indices]
 
 
                     if np.all([uniqueid in original_params_uniqueids for uniqueid in wrap_central_values.keys()]):
@@ -1596,7 +1596,7 @@ class EmceeBackend(BaseSolverBackend):
 
                 else:
                     params_uniqueids_and_indices = [_extract_index_from_string(uid) for uid in params_uniqueids]
-                    params_twigs = [_to_twig_with_index(b.get_parameter(uniqueid=uniqueid, **_skip_filter_checks).twig, index) for uniqueid, index in params_uniqueids_and_indices]
+                    params_twigs = [_to_twig_with_index(b.get_parameter(uniqueid=uniqueid).twig, index) for uniqueid, index in params_uniqueids_and_indices]
 
 
                 if not np.all([uniqueid in b.uniqueids for uniqueid in wrap_central_values.keys()]):
@@ -1604,30 +1604,30 @@ class EmceeBackend(BaseSolverBackend):
                     # re-created, then we probably don't even have the original
                     # distributions.... so we're forced using the samples from the solution
                     logger.warning("wrap_central_values uniqueid matches not found, recreating wrapping rules based on last samples")
-                    samples_last_iter = continue_from_ps.get_value(qualifier='samples', **_skip_filter_checks)[continue_from_iter, :, :]
+                    samples_last_iter = continue_from_ps.get_value(qualifier='samples')[continue_from_iter, :, :]
                     wrap_central_values = {}
                     for i, uniqueid in enumerate(params_uniqueids):
 
-                        param = b.get_parameter(uniqueid=uniqueid, **_skip_filter_checks)
+                        param = b.get_parameter(uniqueid=uniqueid)
                         if param.default_unit.physical_type == 'angle':
                             samples_this_param = samples_last_iter[:, i]
                             wrap_central_values[uniqueid] = np.median(samples_this_param)
 
-                params_units = continue_from_ps.get_value(qualifier='fitted_units', **_skip_filter_checks)
-                continued_samples = continue_from_ps.get_value(qualifier='samples', **_skip_filter_checks)[:continue_from_iter, :, :]
+                params_units = continue_from_ps.get_value(qualifier='fitted_units')
+                continued_samples = continue_from_ps.get_value(qualifier='samples')[:continue_from_iter, :, :]
                 expose_failed = 'failed_samples' in continue_from_ps.qualifiers
                 kwargs['expose_failed'] = expose_failed # needed for _get_packet_and_solution
                 if expose_failed:
-                    continued_failed_samples = continue_from_ps.get_value(qualifier='failed_samples', **_skip_filter_checks)
+                    continued_failed_samples = continue_from_ps.get_value(qualifier='failed_samples')
                 else:
                     continued_failed_samples = {}
 
                 # continued_samples [iterations, walkers, parameter]
-                # continued_accepteds = continue_from_ps.get_value(qualifier='accepteds', **_skip_filter_checks)
+                # continued_accepteds = continue_from_ps.get_value(qualifier='accepteds')
                 # # continued_accepted [iterations, walkers]
-                continued_acceptance_fractions = continue_from_ps.get_value(qualifier='acceptance_fractions', **_skip_filter_checks)
+                continued_acceptance_fractions = continue_from_ps.get_value(qualifier='acceptance_fractions')
                 # continued_acceptance_fractions [iterations, walkers]
-                continued_lnprobabilities = continue_from_ps.get_value(qualifier='lnprobabilities', **_skip_filter_checks)[:continue_from_iter]
+                continued_lnprobabilities = continue_from_ps.get_value(qualifier='lnprobabilities')[:continue_from_iter]
                 # continued_lnprobabilities [iterations, walkers]
 
                 # fake a backend object from the previous solution so that emcee
@@ -1654,7 +1654,7 @@ class EmceeBackend(BaseSolverBackend):
                                 'priors': priors,
                                 'priors_combine': priors_combine,
                                 'solution': kwargs.get('solution', None),
-                                'compute_kwargs': {k:v for k,v in kwargs.items() if k in b.get_compute(compute=compute, **_skip_filter_checks).qualifiers},
+                                'compute_kwargs': {k:v for k,v in kwargs.items() if k in b.get_compute(compute=compute).qualifiers},
                                 'custom_lnprobability_callable': kwargs.pop('custom_lnprobability_callable', None),
                                 'failed_samples_buffer': False if not expose_failed else failed_samples_buffer}
 
@@ -1762,7 +1762,7 @@ class DynestyBackend(BaseSolverBackend):
         if not _use_dynesty:
             raise ImportError("could not import dynesty.  Install (pip install dynesty) and restart phoebe.")
 
-        solver_ps = b.get_solver(solver=solver, **_skip_filter_checks)
+        solver_ps = b.get_solver(solver=solver)
         if not len(solver_ps.get_value(qualifier='priors', init_from=kwargs.get('priors', None))):
             raise ValueError("cannot run dynesty without any distributions in priors")
 
@@ -1933,7 +1933,7 @@ class DynestyBackend(BaseSolverBackend):
             params_units = [dist.unit.to_string() for dist in priors_dc.dists]
 
             params_uniqueids_and_indices = [_extract_index_from_string(uid) for uid in params_uniqueids]
-            params_twigs = [_to_twig_with_index(b.get_parameter(uniqueid=uniqueid, **_skip_filter_checks).twig, index) for uniqueid, index in params_uniqueids_and_indices]
+            params_twigs = [_to_twig_with_index(b.get_parameter(uniqueid=uniqueid).twig, index) for uniqueid, index in params_uniqueids_and_indices]
 
             # NOTE: in dynesty we draw from the priors and pass the prior-transforms,
             # but do NOT include the lnprior term in lnlikelihood, so we pass
@@ -1944,7 +1944,7 @@ class DynestyBackend(BaseSolverBackend):
                                    'priors': [],
                                    'priors_combine': 'and',
                                    'solution': kwargs.get('solution', None),
-                                   'compute_kwargs': {k:v for k,v in kwargs.items() if k in b.get_compute(compute=compute, **_skip_filter_checks).qualifiers},
+                                   'compute_kwargs': {k:v for k,v in kwargs.items() if k in b.get_compute(compute=compute).qualifiers},
                                    'custom_lnprobability_callable': kwargs.pop('custom_lnprobability_callable', None),
                                    'failed_samples_buffer': False if not expose_failed else failed_samples_buffer}
 
@@ -2036,9 +2036,9 @@ class _ScipyOptimizeBaseBackend(BaseSolverBackend):
         return True
 
     def run_checks(self, b, solver, compute, **kwargs):
-        solver_ps = b.get_solver(solver=solver, **_skip_filter_checks)
-        continue_from = solver_ps.get_value(qualifier='continue_from', continue_from=kwargs.get('continue_from', None), **_skip_filter_checks)
-        if continue_from == 'None' and not len(solver_ps.get_value(qualifier='fit_parameters', fit_parameters=kwargs.get('fit_parameters', None), expand=True, **_skip_filter_checks)):
+        solver_ps = b.get_solver(solver=solver)
+        continue_from = solver_ps.get_value(qualifier='continue_from', continue_from=kwargs.get('continue_from', None))
+        if continue_from == 'None' and not len(solver_ps.get_value(qualifier='fit_parameters', fit_parameters=kwargs.get('fit_parameters', None), expand=True)):
             raise ValueError("cannot run scipy.optimize.minimize(method='nelder-mead') without any parameters in fit_parameters")
 
 
@@ -2081,7 +2081,7 @@ class _ScipyOptimizeBaseBackend(BaseSolverBackend):
             fit_parameters = kwargs.get('fit_parameters') # list of twigs
             initial_values = kwargs.get('initial_values') # dictionary
         else:
-            continue_from_ps = kwargs.get('continue_from_ps', b.filter(context='solution', solution=continue_from, **_skip_filter_checks))
+            continue_from_ps = kwargs.get('continue_from_ps', b.filter(context='solution', solution=continue_from))
             fit_parameters = continue_from_ps.get_value('fitted_twigs')
             initial_values = {twig: value for twig, value in zip(fit_parameters, continue_from_ps.get_value('fitted_values'))}
 
@@ -2094,17 +2094,17 @@ class _ScipyOptimizeBaseBackend(BaseSolverBackend):
         fitted_units = []
         for twig_orig in fit_parameters:
             twig, index = _extract_index_from_string(twig_orig)
-            p = b.get_parameter(twig=twig, context=['component', 'dataset', 'feature', 'system'], **_skip_filter_checks)
+            p = b.get_parameter(twig=twig, context=['component', 'dataset', 'feature', 'system'])
             params_uniqueids.append(p.uniqueid if index is None else p.uniqueid+'[{}]'.format(index))
             params_twigs.append(p.twig if index is None else twig_orig)
             p0.append(p.get_value() if index is None else p.get_value()[index])
             fitted_units.append(p.get_default_unit().to_string())
 
         # now override from initial values
-        fitted_params_ps = b.filter(uniqueid=params_uniqueids, **_skip_filter_checks)
+        fitted_params_ps = b.filter(uniqueid=params_uniqueids)
         for twig_orig, v in initial_values.items():
             twig, index = _extract_index_from_string(twig_orig)
-            p = fitted_params_ps.get_parameter(twig=twig, **_skip_filter_checks)
+            p = fitted_params_ps.get_parameter(twig=twig)
             uniqueid = p.uniqueid if index is None else p.uniqueid+'[{}]'.format(index)
             if uniqueid in params_uniqueids:
                 p_ind = params_uniqueids.index(p.uniqueid)
@@ -2114,7 +2114,7 @@ class _ScipyOptimizeBaseBackend(BaseSolverBackend):
             else:
                 logger.warning("ignoring {}={} in initial_values as was not found in fit_parameters".format(twig_orig, value))
 
-        compute_kwargs = {k:v for k,v in kwargs.items() if k in b.get_compute(compute=compute, **_skip_filter_checks).qualifiers}
+        compute_kwargs = {k:v for k,v in kwargs.items() if k in b.get_compute(compute=compute).qualifiers}
 
         options = {k:v for k,v in kwargs.items() if k in self.valid_options}
 
@@ -2199,7 +2199,7 @@ class _ScipyOptimizeBaseBackend(BaseSolverBackend):
         metawargs = {'context': 'solution',
                      'solver': solver,
                      'compute': compute,
-                     'kind': b.get_solver(solver=solver, **_skip_filter_checks).kind,
+                     'kind': b.get_solver(solver=solver).kind,
                      'solution': _solution}
 
         global _use_progressbar
@@ -2297,7 +2297,7 @@ class Differential_CorrectionsBackend(BaseSolverBackend):
         return False
 
     def run_checks(self, b, solver, compute, **kwargs):
-        solver_ps = b.get_solver(solver=solver, **_skip_filter_checks)
+        solver_ps = b.get_solver(solver=solver)
         if not len(solver_ps.get_value(qualifier='fit_parameters', fit_parameters=kwargs.get('fit_parameters', None), expand=True)):
             raise ValueError("cannot run differential_corrections without any parameters in fit_parameters")
 
@@ -2339,7 +2339,7 @@ class Differential_CorrectionsBackend(BaseSolverBackend):
             fit_parameters = kwargs.get('fit_parameters') # list of twigs
             initial_values = kwargs.get('initial_values') # dictionary
         else:
-            continue_from_ps = kwargs.get('continue_from_ps', b.filter(context='solution', solution=continue_from, **_skip_filter_checks))
+            continue_from_ps = kwargs.get('continue_from_ps', b.filter(context='solution', solution=continue_from))
             fit_parameters = continue_from_ps.get_value('fitted_twigs')
             initial_values = {twig: value for twig, value in zip(fit_parameters, continue_from_ps.get_value('fitted_values'))}
         custom_steps = kwargs.get('steps')
@@ -2352,7 +2352,7 @@ class Differential_CorrectionsBackend(BaseSolverBackend):
         fitted_units = []
         for twig_orig in fit_parameters:
             twig, index = _extract_index_from_string(twig_orig)
-            p = b.get_parameter(twig=twig, context=['component', 'dataset', 'feature', 'system'], **_skip_filter_checks)
+            p = b.get_parameter(twig=twig, context=['component', 'dataset', 'feature', 'system'])
             params_uniqueids.append(p.uniqueid if index is None else p.uniqueid+'[{}]'.format(index))
             params_twigs.append(p.twig if index is None else twig_orig)
             value = p.get_value() if index is None else p.get_value()[index]
@@ -2361,10 +2361,10 @@ class Differential_CorrectionsBackend(BaseSolverBackend):
             fitted_units.append(p.get_default_unit().to_string())
 
         # now override from initial values
-        fitted_params_ps = b.filter(uniqueid=params_uniqueids, **_skip_filter_checks)
+        fitted_params_ps = b.filter(uniqueid=params_uniqueids)
         for twig_orig, v in initial_values.items():
             twig, index = _extract_index_from_string(twig_orig)
-            p = fitted_params_ps.get_parameter(twig=twig, **_skip_filter_checks)
+            p = fitted_params_ps.get_parameter(twig=twig)
             uniqueid = p.uniqueid if index is None else p.uniqueid+'[{}]'.format(index)
             if uniqueid in params_uniqueids:
                 p_ind = params_uniqueids.index(p.uniqueid)
@@ -2376,7 +2376,7 @@ class Differential_CorrectionsBackend(BaseSolverBackend):
 
         for twig_orig, s in custom_steps.items():
             twig, index = _extract_index_from_string(twig_orig)
-            p = fitted_params_ps.get_parameter(twig=twig, **_skip_filter_checks)
+            p = fitted_params_ps.get_parameter(twig=twig)
             uniqueid = p.uniqueid if index is None else p.uniqueid+'[{}]'.format(index)
             if uniqueid in params_uniqueids:
                 p_ind = params_uniqueids.index(p.uniqueid)
@@ -2386,7 +2386,7 @@ class Differential_CorrectionsBackend(BaseSolverBackend):
             else:
                 logger.warning("ignoring {}={} in steps as was not found in fit_parameters".format(twig_orig, s))
 
-        compute_kwargs = {k:v for k,v in kwargs.items() if k in b.get_compute(compute=compute, **_skip_filter_checks).qualifiers}
+        compute_kwargs = {k:v for k,v in kwargs.items() if k in b.get_compute(compute=compute).qualifiers}
 
         def _get_packetlist(b_solver, corrections, chi2, eigenvalues, progress):
             return_ = [{'qualifier': 'fitted_uniqueids', 'value': params_uniqueids},
@@ -2422,7 +2422,7 @@ class Differential_CorrectionsBackend(BaseSolverBackend):
 
         if kwargs.get('progressbar', False):
             nforward_models = 1  # baseline model
-            nanalytic_params = len(fitted_params_ps.filter(qualifier=['pblum'], **_skip_filter_checks).twigs)
+            nanalytic_params = len(fitted_params_ps.filter(qualifier=['pblum']).twigs)
             if kwargs.get('deriv_method') == 'symmetric':
                 nforward_models += 2*(len(params_uniqueids)-nanalytic_params)
             else:
@@ -2434,14 +2434,14 @@ class Differential_CorrectionsBackend(BaseSolverBackend):
         else:
             _use_progressbar = False
 
-        datasets_enabled = b.filter(qualifier='enabled', value=True, compute=compute, context='compute', **_skip_filter_checks).datasets
+        datasets_enabled = b.filter(qualifier='enabled', value=True, compute=compute, context='compute').datasets
         # limit to LCs/RVs
-        datasets_enabled = b.filter(dataset=datasets_enabled, kind=['lc', 'rv'], context='dataset', **_skip_filter_checks).datasets
+        datasets_enabled = b.filter(dataset=datasets_enabled, kind=['lc', 'rv'], context='dataset').datasets
 
         # need to ensure we access the obs and sigma arrays in the same order
-        obs_params = b.filter(qualifier=['fluxes', 'rvs'], dataset=datasets_enabled, context='dataset', **_skip_filter_checks).to_list()
+        obs_params = b.filter(qualifier=['fluxes', 'rvs'], dataset=datasets_enabled, context='dataset').to_list()
         obs_data = np.concatenate([p.get_value() for p in obs_params])
-        obs_sigmas = np.concatenate([b.get_parameter(qualifier=['sigmas'], dataset=p.dataset, component=p.component, context='dataset', **_skip_filter_checks).get_value() for p in obs_params])
+        obs_sigmas = np.concatenate([b.get_parameter(qualifier=['sigmas'], dataset=p.dataset, component=p.component, context='dataset').get_value() for p in obs_params])
 
         if len(obs_sigmas) != len(obs_data):
             raise ValueError("sigmas must be provided for all enabled lc and rv datasets")
@@ -2472,7 +2472,7 @@ class Differential_CorrectionsBackend(BaseSolverBackend):
             _dc_pbar.update(1)
 
         for k, (uniqueid, value, step) in enumerate(zip(params_uniqueids, p0, steps)):
-            param = b_solver.get_parameter(uniqueid=uniqueid, **_skip_filter_checks)
+            param = b_solver.get_parameter(uniqueid=uniqueid)
             # analytical derivatives:
             if param.qualifier == 'pblum':
                 A[:,k] = 1
@@ -2504,7 +2504,7 @@ class Differential_CorrectionsBackend(BaseSolverBackend):
                 raise ValueError(f"deriv_method='{deriv_method}' is not recognized ('symmetric' or 'asymmetric' supported).")
 
             # reset this parameter for the next parameter to step
-            param.set_value(value=value, **_skip_filter_checks)
+            param.set_value(value=value)
 
         corrections, chi2, nparams, eigenvalues =  np.linalg.lstsq(V@A, V@xi, rcond=None)
 
@@ -2523,7 +2523,7 @@ class Differential_EvolutionBackend(BaseSolverBackend):
     * <phoebe.frontend.bundle.Bundle.run_solver>
     """
     def run_checks(self, b, solver, compute, **kwargs):
-        solver_ps = b.get_solver(solver=solver, **_skip_filter_checks)
+        solver_ps = b.get_solver(solver=solver)
         if not len(solver_ps.get_value(qualifier='fit_parameters', fit_parameters=kwargs.get('fit_parameters', None), expand=True)):
             raise ValueError("cannot run scipy.optimize.differential_evolution without any parameters in fit_parameters")
 
@@ -2593,7 +2593,7 @@ class Differential_EvolutionBackend(BaseSolverBackend):
             params = []
             fitted_units = []
             for twig in fit_parameters:
-                p = b.get_parameter(twig=twig, context=['component', 'dataset', 'feature', 'system'], **_skip_filter_checks)
+                p = b.get_parameter(twig=twig, context=['component', 'dataset', 'feature', 'system'])
                 params.append(p)
                 params_uniqueids.append(p.uniqueid)
                 params_twigs.append(p.twig)
@@ -2618,7 +2618,7 @@ class Differential_EvolutionBackend(BaseSolverBackend):
             # of the parameter itself are adopted.
             bounds = [_get_bounds(param, bounds_dc.dists[uniqueids.index(param.uniqueid)] if param.uniqueid in uniqueids else None, bounds_sigma) for param in params]
 
-            compute_kwargs = {k:v for k,v in kwargs.items() if k in b.get_compute(compute=compute, **_skip_filter_checks).qualifiers}
+            compute_kwargs = {k:v for k,v in kwargs.items() if k in b.get_compute(compute=compute).qualifiers}
 
             options = {k:v for k,v in kwargs.items() if k in ['strategy', 'maxiter', 'popsize', 'tol', 'atol', 'polish', 'recombination']}
 
@@ -2653,7 +2653,7 @@ class Differential_EvolutionBackend(BaseSolverBackend):
             metawargs = {'context': 'solution',
                         'solver': solver,
                         'compute': compute,
-                        'kind': b.get_solver(solver=solver, **_skip_filter_checks).kind,
+                        'kind': b.get_solver(solver=solver).kind,
                         'solution': _solution}
 
             global _use_progressbar
