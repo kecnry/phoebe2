@@ -1,7 +1,7 @@
 import numpy as np
 import astropy.units as u
 
-from phoebe.parameters import FloatParameter, ParameterSet
+from phoebe.parameters import FloatParameter, IntParameter, BoolParameter, ParameterSet
 from phoebe.features.common import BaseFeature
 
 
@@ -318,6 +318,16 @@ class Spot(ComponentFeature):
 
 class Pulsation(ComponentFeature):
     @classmethod
+    def create_feature_parameters(cls, feature, **kwargs):
+        params = []
+        params += [FloatParameter(qualifier='freq', value=kwargs.get('freq', 1.0), default_unit=u.d**-1, limits=(0, None), description='Pulsation frequency')]
+        params += [FloatParameter(qualifier='radamp', value=kwargs.get('radamp', 0.0), default_unit=u.dimensionless_unscaled, description='Radial amplitude of the pulsation')]
+        params += [IntParameter(qualifier='l', value=kwargs.get('l', 0), limits=(0, None), description='Spherical harmonic degree l')]
+        params += [IntParameter(qualifier='m', value=kwargs.get('m', 0), description='Spherical harmonic order m')]
+        params += [BoolParameter(qualifier='teffext', value=kwargs.get('teffext', False), description='Whether to use external teff perturbation')]
+        return ParameterSet(params), []
+
+    @classmethod
     def parse_bundle(cls, b, feature_ps):
         """
         Initialize a Pulsation feature from the bundle.
@@ -330,7 +340,7 @@ class Pulsation(ComponentFeature):
         teffext = feature_ps.get_value(qualifier='teffext', **_skip_filter_checks)
 
         GM = c.G.to('solRad3 / (solMass d2)').value*b.get_value(qualifier='mass', component=feature_ps.component, context='component', unit=u.solMass, **_skip_filter_checks)
-        R = b.get_value(qualifier='rpole', component=feature_ps.component, section='component', unit=u.solRad, **_skip_filter_checks)
+        R = b.get_value(qualifier='requiv', component=feature_ps.component, context='component', unit=u.solRad, **_skip_filter_checks)
 
         tanamp = GM/R**3/freq**2
 
