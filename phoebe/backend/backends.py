@@ -925,6 +925,84 @@ class PhoebeBackend(BaseBackendByTime):
         if len(starrefs)==1 and computeparams.get_value(qualifier='distortion_method', component=starrefs[0], **kwargs) in ['roche', 'none']:
             raise ValueError("distortion_method='{}' not valid for single star".format(computeparams.get_value(qualifier='distortion_method', component=starrefs[0], **kwargs)))
 
+    def _resolve_time_dependent_override_target(self, b, target):
+        """
+        Resolve a user-provided target into a concrete parameter object.
+        """
+        try:
+            if isinstance(target, str):
+                try:
+                    return b.get_parameter(uniqueid=target, **_skip_filter_checks)
+                except Exception:
+                    return b.get_parameter(twig=target, **_skip_filter_checks)
+
+            if isinstance(target, dict):
+                if target.get('uniqueid', None) is not None:
+                    return b.get_parameter(uniqueid=target.get('uniqueid'), **_skip_filter_checks)
+
+                filter_kwargs = {}
+                for key in ['twig', 'qualifier', 'component', 'dataset', 'feature', 'model', 'context', 'kind', 'time']:
+                    if key in target and target.get(key) is not None:
+                        filter_kwargs[key] = target.get(key)
+
+                if len(filter_kwargs):
+                    return b.get_parameter(**dict(filter_kwargs, **_skip_filter_checks))
+
+            if isinstance(target, tuple) and len(target) == 2:
+                qualifier, component = target
+                return b.get_parameter(qualifier=qualifier,
+                                       component=component,
+                                       **_skip_filter_checks)
+        except Exception:
+            return None
+
+        return None
+
+    def _collect_time_dependent_overrides(self, b, feature_objs, t):
+        """
+        Gather per-time parameter overrides from enabled feature objects.
+        """
+        overrides = {}
+        for feature_obj in feature_objs:
+            hook = getattr(feature_obj, 'compute_time_parameter_overrides', None)
+            if not callable(hook):
+                continue
+
+            feature_name = feature_obj.__class__.__name__
+            try:
+                provided = hook(t)
+            except Exception as err:
+                logger.warning("feature '{}' failed while collecting time-dependent overrides at t={}: {}".format(feature_name, t, err))
+                continue
+
+            if provided is None:
+                continue
+
+            if isinstance(provided, dict):
+                entries = [(target, value) for target, value in provided.items()]
+            elif isinstance(provided, (list, tuple)):
+                entries = []
+                for entry in provided:
+                    if not isinstance(entry, dict) or 'value' not in entry:
+                        logger.warning("feature '{}' returned invalid override entry (expected dict with keys target/value): {}".format(feature_name, entry))
+                        continue
+                    target = entry.get('target', None)
+                    if target is None:
+                        target = {k: v for k, v in entry.items() if k not in ['value']}
+                    entries.append((target, entry.get('value')))
+            else:
+                logger.warning("feature '{}' returned invalid override container type {} (expected dict/list/tuple)".format(feature_name, type(provided)))
+                continue
+
+            for target, value in entries:
+                param = self._resolve_time_dependent_override_target(b, target)
+                if param is None:
+                    logger.warning("feature '{}' provided an override target that could not be resolved: {}".format(feature_name, target))
+                    continue
+                overrides[param.uniqueid] = value
+
+        return overrides
+
     def _compute_intrinsic_system_at_t0(self, b, compute,
                                           dynamics_method=None,
                                           hier=None,
@@ -1016,6 +1094,16 @@ class PhoebeBackend(BaseBackendByTime):
             for comp, pblum_scale in pblums_scale[dataset].items():
                 system.get_body(comp).set_pblum_scale(dataset, component=comp, pblum_scale=pblum_scale)
 
+        time_dependent_feature_objs = []
+        for feature in b.filter(qualifier='enabled', compute=compute, value=True, **_skip_filter_checks).features:
+            feature_ps = b.get_feature(feature=feature, **_skip_filter_checks)
+            if feature_ps.get_value(qualifier='feature_type', **_skip_filter_checks) != 'component':
+                continue
+
+            feature_obj = b.get_feature_code(feature=feature)
+            if callable(getattr(feature_obj, 'compute_time_parameter_overrides', None)):
+                time_dependent_feature_objs.append(feature_obj)
+
         if len(meshablerefs) > 1 or hier.get_kind_of(meshablerefs[0])=='envelope':
             logger.debug("rank:{}/{} PhoebeBackend._worker_setup: computing dynamics at all times".format(mpi.myrank, mpi.nprocs))
             # TODO: make sure that this takes systemic velocity and corrects positions and velocities (including ltte effects if enabled)
@@ -1039,6 +1127,7 @@ class PhoebeBackend(BaseBackendByTime):
                     hier=hier,
                     meshablerefs=meshablerefs,
                     starrefs=starrefs,
+                    time_dependent_feature_objs=time_dependent_feature_objs,
                     extrapolation_max_frac=extrapolation_max_frac,
                     dynamics_method=dynamics_method,
                     ts=ts, xs=xs, ys=ys, zs=zs,
@@ -1055,6 +1144,7 @@ class PhoebeBackend(BaseBackendByTime):
         starrefs = kwargs.get('starrefs')
         extrapolation_max_frac = kwargs.get('extrapolation_max_frac', {})
         dynamics_method = kwargs.get('dynamics_method')
+        time_dependent_feature_objs = kwargs.get('time_dependent_feature_objs', [])
         xs = kwargs.get('xs')
         ys = kwargs.get('ys')
         zs = kwargs.get('zs')
@@ -1064,6 +1154,10 @@ class PhoebeBackend(BaseBackendByTime):
         ethetas = kwargs.get('ethetas')
         elongans = kwargs.get('elongans')
         eincls = kwargs.get('eincls')
+
+        transient_parameter_overrides = self._collect_time_dependent_overrides(b, time_dependent_feature_objs, time)
+        previous_transient_overrides = getattr(b, '_transient_parameter_overrides', None)
+        b._transient_parameter_overrides = transient_parameter_overrides
 
         # Check to see what we might need to do that requires a mesh
         # TODO: make sure to use the requested distortion_method
@@ -1242,7 +1336,6 @@ class PhoebeBackend(BaseBackendByTime):
                 packetlist.append(_make_packet('fluxes',
                                               obs['flux']*u.W/u.m**2,
                                               time, info))
-
             elif kind=='orb':
                 # ts[i], xs[cind][i], ys[cind][i], zs[cind][i], vxs[cind][i], vys[cind][i], vzs[cind][i]
 
@@ -1514,6 +1607,14 @@ class PhoebeBackend(BaseBackendByTime):
 
             else:
                 raise NotImplementedError("kind {} not yet supported by this backend".format(kind))
+
+        if previous_transient_overrides is None:
+            try:
+                del b._transient_parameter_overrides
+            except Exception:
+                pass
+        else:
+            b._transient_parameter_overrides = previous_transient_overrides
 
         logger.debug("rank:{}/{} PhoebeBackend._run_single_time: returning packetlist at time={}".format(mpi.myrank, mpi.nprocs, time))
 

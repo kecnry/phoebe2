@@ -26,7 +26,7 @@ class ComponentFeature(BaseFeature):
     recomputed (set in this superclass' `__init__()` method) but inherited
     classes should overload `self.requires_remeshing`.
     """
-    allowed_component_kinds = ['star', 'envelope']
+    allowed_component_kinds = ['star', 'envelope', 'orbit']
     allowed_dataset_kinds = [None]
 
     def __repr__(self):
@@ -37,6 +37,22 @@ class ComponentFeature(BaseFeature):
         Whether this feature requires remeshing of the component mesh.
         """
         return False
+
+    def compute_time_parameter_overrides(self, t):
+        """
+        Return compute-time parameter overrides for the current time.
+
+        The default implementation returns an empty mapping. Feature subclasses
+        can override this to provide ephemeral values consumed during
+        ``run_compute`` without mutating bundle parameters.
+
+        Supported return formats:
+        * ``dict``: ``{target: value}`` where ``target`` is either a twig,
+          uniqueid, or a dictionary of filter keys accepted by
+          ``b.get_parameter`` (for example ``{'qualifier': 'incl', 'component': 'binary'}``).
+        * ``list``/``tuple`` of dict entries, each with ``target`` and ``value``.
+        """
+        return {}
 
     def cartesian_to_spherical(self, roche_coords):
         """

@@ -3204,6 +3204,31 @@ class ParameterSet(object):
 
         param = self.get_parameter(twig=twig, **kwargs)
 
+        # compute backends can inject ephemeral per-time values keyed by
+        # parameter uniqueid. These are read-only overrides and do not mutate
+        # stored parameter values.
+        transient_overrides = None
+        if self._bundle is not None:
+            transient_overrides = getattr(self._bundle, '_transient_parameter_overrides', None)
+        else:
+            transient_overrides = getattr(self, '_transient_parameter_overrides', None)
+
+        if isinstance(transient_overrides, dict) and param.uniqueid in transient_overrides:
+            override_value = transient_overrides.get(param.uniqueid)
+            if isinstance(param, FloatParameter) or isinstance(param, FloatArrayParameter):
+                if isinstance(override_value, u.Quantity):
+                    q = override_value
+                else:
+                    q = override_value * param.default_unit
+
+                if unit is not None:
+                    if isinstance(unit, str) and unit.lower() in ['solar', 'si']:
+                        unit = _helpers.get_unit_in_system(param.default_unit, unit)
+                    q = q.to(unit)
+                return q
+
+            return override_value
+
         return param.get_quantity(unit=unit, t=t, **{k: v for k,v in kwargs.items() if k==param.qualifier})
 
     def set_quantity(self, twig=None, value=None, **kwargs):
@@ -3296,6 +3321,50 @@ class ParameterSet(object):
             kwargs['uniqueid'], index = _extract_index_from_string(kwargs.get('uniqueid'))
 
         param = self.get_parameter(twig=twig, **kwargs)
+
+        # compute backends can inject ephemeral per-time values keyed by
+        # parameter uniqueid. These are read-only overrides and do not mutate
+        # stored parameter values.
+        transient_overrides = None
+        if self._bundle is not None:
+            transient_overrides = getattr(self._bundle, '_transient_parameter_overrides', None)
+        else:
+            transient_overrides = getattr(self, '_transient_parameter_overrides', None)
+
+        if isinstance(transient_overrides, dict) and param.uniqueid in transient_overrides:
+            override_value = transient_overrides.get(param.uniqueid)
+
+            if index is not None:
+                if isinstance(param, FloatArrayParameter):
+                    if isinstance(override_value, u.Quantity):
+                        q = override_value
+                    else:
+                        q = override_value * param.default_unit
+
+                    if unit is not None:
+                        if isinstance(unit, str) and unit.lower() in ['solar', 'si']:
+                            unit = _helpers.get_unit_in_system(param.default_unit, unit)
+                        q = q.to(unit)
+                    return q.value[tuple(index)]
+                else:
+                    raise ValueError("indices only supported for FloatArrayParameter")
+
+            if isinstance(param, FloatParameter) or isinstance(param, FloatArrayParameter):
+                if isinstance(override_value, u.Quantity):
+                    q = override_value
+                else:
+                    q = override_value * param.default_unit
+
+                if unit is not None:
+                    if isinstance(unit, str) and unit.lower() in ['solar', 'si']:
+                        unit = _helpers.get_unit_in_system(param.default_unit, unit)
+                    q = q.to(unit)
+                else:
+                    q = q.to(param.default_unit)
+
+                return q.value
+
+            return override_value
 
         # if hasattr(param, 'default_unit'):
         # This breaks for constraint parameters
@@ -11308,6 +11377,8 @@ class HierarchyParameter(StringParameter):
         * `dperdt` is non-zero
         * a feature (eg. spot) is attached to an asynchronous star (with
             non-unity value for `syncpar`).
+        * any component feature overrides
+            `compute_time_parameter_overrides`.
         * a gaussian_process feature is attached to any dataset, unless
             `consider_gaussian_process` is False.
 
@@ -11337,6 +11408,15 @@ class HierarchyParameter(StringParameter):
                 if self._bundle.get_value(qualifier='syncpar', component=component, context='component') != 1 and len(self._bundle.filter(context='feature', component=component)):
                     # spots on asynchronous stars
                     return True
+
+        for feature in self._bundle.filter(context='feature', **_skip_filter_checks).features:
+            feature_ps = self._bundle.get_feature(feature=feature, **_skip_filter_checks)
+            if feature_ps.get_value(qualifier='feature_type', **_skip_filter_checks) != 'component':
+                continue
+
+            feature_cls = self._bundle.get_feature_code(feature=feature, instantiate=False)
+            if 'compute_time_parameter_overrides' in getattr(feature_cls, '__dict__', {}):
+                return True
 
         # TODO: allow passing compute to do only enabled features attached to enabled datasets?
         if consider_gaussian_process and len(self._bundle.filter(kind=['gp_sklearn', 'gp_celerite2'], context='feature', **_skip_filter_checks).features):

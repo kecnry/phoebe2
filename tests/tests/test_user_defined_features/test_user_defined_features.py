@@ -96,6 +96,25 @@ class CustomFrequencyFeature(ComponentFeature):
         return [{}]
 
 
+class CustomTimeDependentComponentFeature(ComponentFeature):
+    allowed_component_kinds = ['star', 'envelope']
+
+    @classmethod
+    def create_feature_parameters(cls, feature, **kwargs):
+        return ParameterSet([]), []
+
+    @classmethod
+    def parse_bundle(cls, b, feature_ps):
+        return {}
+
+    @classmethod
+    def run_checks_compute(cls, b, feature_ps, compute_ps):
+        return [{}]
+
+    def compute_time_parameter_overrides(self, t):
+        return {}
+
+
 def test_user_defined_component_feature_save_load(tmp_path):
     b = phoebe.default_binary()
     b.add_feature(
@@ -209,3 +228,17 @@ def test_user_defined_component_feature_rejects_component_and_dataset_attachment
             test_param=2,
             feature='invalid_custom_component_feature',
         )
+
+
+def test_component_feature_time_overrides_mark_system_time_dependent():
+    b = phoebe.default_binary()
+
+    assert b.hierarchy.is_time_dependent(consider_gaussian_process=False) is False
+
+    b.add_feature(
+        CustomTimeDependentComponentFeature,
+        component='primary',
+        feature='my_time_dependent_component_feature',
+    )
+
+    assert b.hierarchy.is_time_dependent(consider_gaussian_process=False) is True
