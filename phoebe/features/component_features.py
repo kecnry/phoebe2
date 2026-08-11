@@ -5,7 +5,7 @@ from phoebe.parameters import FloatParameter, IntParameter, BoolParameter, Param
 from phoebe.features.common import BaseFeature
 
 
-__all__ = ['ComponentFeature', 'Spot', 'Pulsation']
+__all__ = ['ComponentFeature', 'Spot', 'GeometricPulsation']
 
 _skip_filter_checks = {'check_default': False, 'check_visible': False}
 
@@ -316,12 +316,13 @@ class Spot(ComponentFeature):
         return teffs
 
 
-class Pulsation(ComponentFeature):
+class GeometricPulsation(ComponentFeature):
     @classmethod
     def create_feature_parameters(cls, feature, **kwargs):
         params = []
         params += [FloatParameter(qualifier='freq', value=kwargs.get('freq', 1.0), default_unit=u.d**-1, limits=(0, None), description='Pulsation frequency')]
         params += [FloatParameter(qualifier='radamp', value=kwargs.get('radamp', 0.0), default_unit=u.dimensionless_unscaled, description='Radial amplitude of the pulsation')]
+        params += [FloatParameter(qualifier='phase', value=kwargs.get('phase', 0.0), default_unit=u.dimensionless_unscaled, description='Phase of pulsations at time t0@system')]
         params += [IntParameter(qualifier='l', value=kwargs.get('l', 0), limits=(0, None), description='Spherical harmonic degree l')]
         params += [IntParameter(qualifier='m', value=kwargs.get('m', 0), description='Spherical harmonic order m')]
         params += [BoolParameter(qualifier='teffext', value=kwargs.get('teffext', False), description='Whether to use external teff perturbation')]
@@ -335,62 +336,52 @@ class Pulsation(ComponentFeature):
         from phoebe import c
         freq = feature_ps.get_value(qualifier='freq', unit=u.d**-1, **_skip_filter_checks)
         radamp = feature_ps.get_value(qualifier='radamp', unit=u.dimensionless_unscaled, **_skip_filter_checks)
+        phase = feature_ps.get_value(qualifier='phase', unit=u.dimensionless_unscaled, **_skip_filter_checks)
         l = feature_ps.get_value(qualifier='l', unit=u.dimensionless_unscaled, **_skip_filter_checks)
         m = feature_ps.get_value(qualifier='m', unit=u.dimensionless_unscaled, **_skip_filter_checks)
         teffext = feature_ps.get_value(qualifier='teffext', **_skip_filter_checks)
 
+        t0 = b.get_value(qualifier='t0', context='system', unit=u.d, **_skip_filter_checks)
+
         GM = c.G.to('solRad3 / (solMass d2)').value*b.get_value(qualifier='mass', component=feature_ps.component, context='component', unit=u.solMass, **_skip_filter_checks)
         R = b.get_value(qualifier='requiv', component=feature_ps.component, context='component', unit=u.solRad, **_skip_filter_checks)
 
+        # Cowling assumption
         tanamp = GM/R**3/freq**2
 
-        return dict(radamp=radamp, freq=freq, l=l, m=m, tanamp=tanamp, teffext=teffext)
-
-    @classmethod
-    def Y(self, m, l, theta, phi):
-        try:
-            from scipy.special import sph_harm as Y
-        except ImportError:
-            from scipy.special import sph_harm_y as _sph_harm_y
-
-        def Y(m, n, theta, phi):
-            return _sph_harm_y(n, m, theta, phi)
-
-        return Y(m, l, theta, phi)
-
-    def dYdtheta(self, m, l, theta, phi):
-        if abs(m) > l:
-            return 0
-
-        # TODO: just a quick hack
-        if abs(m+1) > l:
-            last_term = 0.0
-        else:
-            last_term = self.Y(m+1, l, theta, phi)
-
-        return m/np.tan(theta)*self.Y(m, l, theta, phi) + np.sqrt((l-m)*(l+m+1))*np.exp(-1j*phi)*last_term
-
-    def dYdphi(self, m, l, theta, phi):
-        return 1j*m*self.Y(m, l, theta, phi)
+        return dict(radamp=radamp, freq=freq, phase=phase, t0=t0, l=l, m=m, tanamp=tanamp, teffext=teffext)
 
     def modify_coords_for_computations(self, coords_for_computations, s, t):
         """
         """
+        from phoebe.backend import asteroseismo
+
         if self.kwargs['teffext']:
             return coords_for_computations
 
-        x, y, z, r = coords_for_computations[:,0], coords_for_computations[:,1], coords_for_computations[:,2], np.sqrt((coords_for_computations**2).sum(axis=1))
+        x, y, z = coords_for_computations[:, 0], coords_for_computations[:, 1], coords_for_computations[:, 2]
+        r = np.sqrt((coords_for_computations**2).sum(axis=1))
         theta = np.arccos(z/r)
         phi = np.arctan2(y, x)
+        phase = 2*np.pi*self.kwargs['freq']*(t - self.kwargs['t0']) + self.kwargs['phase']
 
-        xi_r = self.kwargs['radamp'] * self.Y(self.kwargs['m'], self.kwargs['l'], theta, phi) * np.exp(-1j*2*np.pi*self.kwargs['freq']*t)
-        xi_t = self.kwargs['tanamp'] * self.dYdtheta(self.kwargs['m'], self.kwargs['l'], theta, phi) * np.exp(-1j*2*np.pi*self.kwargs['freq']*t)
-        xi_p = self.kwargs['tanamp']/np.sin(theta) * self.dYdphi(self.kwargs['m'], self.kwargs['l'], theta, phi) * np.exp(-1j*2*np.pi*self.kwargs['freq']*t)
+        l, m = self.kwargs['l'], self.kwargs['m']
+        xi_r = self.kwargs['radamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_r(l, m, theta, phi, phase)
+        if l > 0:
+            xi_t = self.kwargs['tanamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_theta(l, m, theta, phi, phase)
+            xi_p = self.kwargs['tanamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_phi(l, m, theta, phi, phase)
+        else:
+            xi_t = np.zeros_like(theta)
+            xi_p = np.zeros_like(phi)
+
+        new_r = r + xi_r.real
+        new_theta = theta + xi_t.real
+        new_phi = phi + xi_p.real
 
         new_coords = np.zeros(coords_for_computations.shape)
-        new_coords[:,0] = coords_for_computations[:,0] + xi_r * np.sin(theta) * np.cos(phi)
-        new_coords[:,1] = coords_for_computations[:,1] + xi_r * np.sin(theta) * np.sin(phi)
-        new_coords[:,2] = coords_for_computations[:,2] + xi_r * np.cos(theta)
+        new_coords[:, 0] = new_r * np.sin(new_theta) * np.sin(new_phi)
+        new_coords[:, 1] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 2] = new_r * np.cos(new_theta)
 
         return new_coords
 
@@ -406,22 +397,35 @@ class Pulsation(ComponentFeature):
 
           b(r) = a(r) GM/(R^3*f^2)
         """
+        from phoebe.backend import asteroseismo
+
         # TODO: we do want to displace the coords_for_observations, but the x,y,z,r below are from the ALSO displaced coords_for_computations
         # if not self.kwargs['teffext']:
             # return coords_for_observations
 
-        x, y, z, r = coords_for_computations[:,0], coords_for_computations[:,1], coords_for_computations[:,2], np.sqrt((coords_for_computations**2).sum(axis=1))
+        x, y, z = coords_for_observations[:, 0], coords_for_observations[:, 1], coords_for_observations[:, 2]
+        r = np.sqrt((coords_for_observations**2).sum(axis=1))
         theta = np.arccos(z/r)
         phi = np.arctan2(y, x)
+        phase = 2*np.pi*self.kwargs['freq']*(t - self.kwargs['t0']) + self.kwargs['phase']
 
-        xi_r = self.kwargs['radamp'] * self.Y(self.kwargs['m'], self.kwargs['l'], theta, phi) * np.exp(-1j*2*np.pi*self.kwargs['freq']*t)
-        xi_t = self.kwargs['tanamp'] * self.dYdtheta(self.kwargs['m'], self.kwargs['l'], theta, phi) * np.exp(-1j*2*np.pi*self.kwargs['freq']*t)
-        xi_p = self.kwargs['tanamp']/np.sin(theta) * self.dYdphi(self.kwargs['m'], self.kwargs['l'], theta, phi) * np.exp(-1j*2*np.pi*self.kwargs['freq']*t)
+        l, m = self.kwargs['l'], self.kwargs['m']
+        xi_r = self.kwargs['radamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_r(l, m, theta, phi, phase)
+        if l > 0:
+            xi_t = self.kwargs['tanamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_theta(l, m, theta, phi, phase)
+            xi_p = self.kwargs['tanamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_phi(l, m, theta, phi, phase)
+        else:
+            xi_t = np.zeros_like(theta)
+            xi_p = np.zeros_like(phi)
+
+        new_r = r + xi_r.real
+        new_theta = theta + xi_t.real
+        new_phi = phi + xi_p.real
 
         new_coords = np.zeros(coords_for_observations.shape)
-        new_coords[:,0] = coords_for_observations[:,0] + xi_r * np.sin(theta) * np.cos(phi)
-        new_coords[:,1] = coords_for_observations[:,1] + xi_r * np.sin(theta) * np.sin(phi)
-        new_coords[:,2] = coords_for_observations[:,2] + xi_r * np.cos(theta)
+        new_coords[:, 0] = new_r * np.sin(new_theta) * np.sin(new_phi)
+        new_coords[:, 1] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 2] = new_r * np.cos(new_theta)
 
         return new_coords
 
