@@ -325,13 +325,12 @@ class GeometricPulsation(ComponentFeature):
         params += [FloatParameter(qualifier='phase', value=kwargs.get('phase', 0.0), default_unit=u.dimensionless_unscaled, description='Phase of pulsations at time t0@system')]
         params += [IntParameter(qualifier='l', value=kwargs.get('l', 0), limits=(0, None), description='Spherical harmonic degree l')]
         params += [IntParameter(qualifier='m', value=kwargs.get('m', 0), description='Spherical harmonic order m')]
-        params += [BoolParameter(qualifier='teffext', value=kwargs.get('teffext', False), description='Whether to use external teff perturbation')]
         return ParameterSet(params), []
 
     @classmethod
     def parse_bundle(cls, b, feature_ps):
         """
-        Initialize a Pulsation feature from the bundle.
+        Initialize a Geometric Pulsation feature from the bundle.
         """
         from phoebe import c
         freq = feature_ps.get_value(qualifier='freq', unit=u.d**-1, **_skip_filter_checks)
@@ -339,7 +338,6 @@ class GeometricPulsation(ComponentFeature):
         phase = feature_ps.get_value(qualifier='phase', unit=u.dimensionless_unscaled, **_skip_filter_checks)
         l = feature_ps.get_value(qualifier='l', unit=u.dimensionless_unscaled, **_skip_filter_checks)
         m = feature_ps.get_value(qualifier='m', unit=u.dimensionless_unscaled, **_skip_filter_checks)
-        teffext = feature_ps.get_value(qualifier='teffext', **_skip_filter_checks)
 
         t0 = b.get_value(qualifier='t0', context='system', unit=u.d, **_skip_filter_checks)
 
@@ -349,15 +347,12 @@ class GeometricPulsation(ComponentFeature):
         # Cowling assumption
         tanamp = GM/R**3/freq**2
 
-        return dict(radamp=radamp, freq=freq, phase=phase, t0=t0, l=l, m=m, tanamp=tanamp, teffext=teffext)
+        return dict(radamp=radamp, freq=freq, phase=phase, t0=t0, l=l, m=m, tanamp=tanamp)
 
     def modify_coords_for_computations(self, coords_for_computations, s, t):
         """
         """
         from phoebe.backend import asteroseismo
-
-        if self.kwargs['teffext']:
-            return coords_for_computations
 
         x, y, z = coords_for_computations[:, 0], coords_for_computations[:, 1], coords_for_computations[:, 2]
         r = np.sqrt((coords_for_computations**2).sum(axis=1))
@@ -399,10 +394,6 @@ class GeometricPulsation(ComponentFeature):
         """
         from phoebe.backend import asteroseismo
 
-        # TODO: we do want to displace the coords_for_observations, but the x,y,z,r below are from the ALSO displaced coords_for_computations
-        # if not self.kwargs['teffext']:
-            # return coords_for_observations
-
         x, y, z = coords_for_observations[:, 0], coords_for_observations[:, 1], coords_for_observations[:, 2]
         r = np.sqrt((coords_for_observations**2).sum(axis=1))
         theta = np.arccos(z/r)
@@ -428,11 +419,3 @@ class GeometricPulsation(ComponentFeature):
         new_coords[:, 2] = new_r * np.cos(new_theta)
 
         return new_coords
-
-    def modify_teffs(self, teffs, roche_coords, s=np.array([0., 0., 1.]), t=None):
-        """
-        """
-        if not self.kwargs['teffext']:
-            return teffs
-
-        raise NotImplementedError("teffext=True not yet supported for pulsations")
