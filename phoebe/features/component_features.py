@@ -317,11 +317,14 @@ class Spot(ComponentFeature):
 
 
 class GeometricPulsation(ComponentFeature):
+    def requires_remeshing(self):
+        return True
+
     @classmethod
     def create_feature_parameters(cls, feature, **kwargs):
         params = []
         params += [FloatParameter(qualifier='freq', value=kwargs.get('freq', 1.0), default_unit=u.d**-1, limits=(0, None), description='Pulsation frequency')]
-        params += [FloatParameter(qualifier='radamp', value=kwargs.get('radamp', 0.0), default_unit=u.dimensionless_unscaled, description='Radial amplitude of the pulsation')]
+        params += [FloatParameter(qualifier='radamp', value=kwargs.get('radamp', 0.1), default_unit=u.dimensionless_unscaled, description='Radial amplitude of the pulsation')]
         params += [FloatParameter(qualifier='phase', value=kwargs.get('phase', 0.0), default_unit=u.dimensionless_unscaled, description='Phase of pulsations at time t0@system')]
         params += [IntParameter(qualifier='l', value=kwargs.get('l', 0), limits=(0, None), description='Spherical harmonic degree l')]
         params += [IntParameter(qualifier='m', value=kwargs.get('m', 0), description='Spherical harmonic order m')]
@@ -344,7 +347,11 @@ class GeometricPulsation(ComponentFeature):
         GM = c.G.to('solRad3 / (solMass d2)').value*b.get_value(qualifier='mass', component=feature_ps.component, context='component', unit=u.solMass, **_skip_filter_checks)
         R = b.get_value(qualifier='requiv', component=feature_ps.component, context='component', unit=u.solRad, **_skip_filter_checks)
 
-        # Cowling assumption
+        # Cowling assumption.
+        # NOTE: currently unused -- modify_coords_* implement a radial-only
+        # model. Kept so the ratio is available when the tangential term is
+        # enabled. Also note this is GM/(R^3 f^2), missing (2*pi)^2 relative
+        # to the standard K = GM/(R^3 omega^2).
         tanamp = GM/R**3/freq**2
 
         return dict(radamp=radamp, freq=freq, phase=phase, t0=t0, l=l, m=m, tanamp=tanamp)
@@ -362,20 +369,39 @@ class GeometricPulsation(ComponentFeature):
 
         l, m = self.kwargs['l'], self.kwargs['m']
         xi_r = self.kwargs['radamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_r(l, m, theta, phi, phase)
-        if l > 0:
-            xi_t = self.kwargs['tanamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_theta(l, m, theta, phi, phase)
-            xi_p = self.kwargs['tanamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_phi(l, m, theta, phi, phase)
-        else:
-            xi_t = np.zeros_like(theta)
-            xi_p = np.zeros_like(phi)
+
+        # ---------------------------------------------------------------
+        # RADIAL-DISPLACEMENT-ONLY MODEL -- this is deliberate.
+        #
+        # as_xi_theta/as_xi_phi default to k=0 and Omega=0, for which every
+        # tangential term is identically zero:
+        #   * term1 carries an explicit factor of k;
+        #   * as_norm_atlp1/as_norm_atlm1 both return 0.0 for Omega < 1e-6.
+        # So 'tanamp' (the Cowling ratio computed in parse_bundle) would only
+        # ever multiply an array of zeros. We zero xi_t/xi_p explicitly rather
+        # than hide that behind a call that looks like it does something.
+        #
+        # Enabling the tangential displacement properly needs
+        #   k     = |xi_h/xi_r| at the surface   (GYRE gives this per mode)
+        #   Omega = Omega_rot/omega
+        # For an LC-only fit k is set by GM/R^3, i.e. by sma -- which a light
+        # curve does not constrain -- so the tangential-to-radial ratio would
+        # be arbitrary. Revisit once radial velocities pin the scale.
+        #
+        # The angular pattern of xi_r still depends on both l and m through
+        # Y_lm, so (l, m) is not degenerate -- but modes differ less than the
+        # labels suggest.
+        # ---------------------------------------------------------------
+        xi_t = np.zeros_like(theta)
+        xi_p = np.zeros_like(phi)
 
         new_r = r + xi_r.real
         new_theta = theta + xi_t.real
         new_phi = phi + xi_p.real
 
         new_coords = np.zeros(coords_for_computations.shape)
-        new_coords[:, 0] = new_r * np.sin(new_theta) * np.sin(new_phi)
-        new_coords[:, 1] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 0] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 1] = new_r * np.sin(new_theta) * np.sin(new_phi)
         new_coords[:, 2] = new_r * np.cos(new_theta)
 
         return new_coords
@@ -402,20 +428,40 @@ class GeometricPulsation(ComponentFeature):
 
         l, m = self.kwargs['l'], self.kwargs['m']
         xi_r = self.kwargs['radamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_r(l, m, theta, phi, phase)
-        if l > 0:
-            xi_t = self.kwargs['tanamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_theta(l, m, theta, phi, phase)
-            xi_p = self.kwargs['tanamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_phi(l, m, theta, phi, phase)
-        else:
-            xi_t = np.zeros_like(theta)
-            xi_p = np.zeros_like(phi)
+
+        # ---------------------------------------------------------------
+        # RADIAL-DISPLACEMENT-ONLY MODEL -- this is deliberate.
+        #
+        # as_xi_theta/as_xi_phi default to k=0 and Omega=0, for which every
+        # tangential term is identically zero:
+        #   * term1 carries an explicit factor of k;
+        #   * as_norm_atlp1/as_norm_atlm1 both return 0.0 for Omega < 1e-6.
+        # So 'tanamp' (the Cowling ratio computed in parse_bundle) would only
+        # ever multiply an array of zeros. We zero xi_t/xi_p explicitly rather
+        # than hide that behind a call that looks like it does something.
+        #
+        # Enabling the tangential displacement properly needs
+        #   k     = |xi_h/xi_r| at the surface   (GYRE gives this per mode)
+        #   Omega = Omega_rot/omega
+        # For an LC-only fit k is set by GM/R^3, i.e. by sma -- which a light
+        # curve does not constrain -- so the tangential-to-radial ratio would
+        # be arbitrary. Revisit once radial velocities pin the scale.
+        #
+        # The angular pattern of xi_r still depends on both l and m through
+        # Y_lm, so (l, m) is not degenerate -- but modes differ less than the
+        # labels suggest.
+        # ---------------------------------------------------------------
+        xi_t = np.zeros_like(theta)
+        xi_p = np.zeros_like(phi)
 
         new_r = r + xi_r.real
         new_theta = theta + xi_t.real
         new_phi = phi + xi_p.real
 
         new_coords = np.zeros(coords_for_observations.shape)
-        new_coords[:, 0] = new_r * np.sin(new_theta) * np.sin(new_phi)
-        new_coords[:, 1] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 0] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 1] = new_r * np.sin(new_theta) * np.sin(new_phi)
         new_coords[:, 2] = new_r * np.cos(new_theta)
 
         return new_coords
+
