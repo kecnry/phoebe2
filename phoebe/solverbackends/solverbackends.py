@@ -2635,14 +2635,42 @@ class Differential_EvolutionBackend(BaseSolverBackend):
                 _minimize_iter += 1
                 global _minimize_pbar
                 global _use_progressbar
+                global _progress_every_niters
+                global _solution_ps
 
-                maxiter = _minimize_pbar.total
+                maxiter = _minimize_pbar.total if _use_progressbar else kwargs.get('maxiter', 1000000)
                 progress = float(_minimize_iter) / maxiter * 100
 
                 if _use_progressbar:
                     _minimize_pbar.update(1)
 
-                # TODO: include logic for saving progress to file (if possible)
+                if _progress_every_niters == 0 and 'out_fname' in kwargs:
+                    fname = kwargs.get('out_fname') + '.progress'
+                    with open(fname, 'w') as f:
+                        f.write(str(progress))
+
+                if _progress_every_niters > 0 and (_minimize_iter == 1 or _minimize_iter % _progress_every_niters == 0):
+                    logger.info("differential_evolution: saving output from iteration {}".format(_minimize_iter))
+
+                    _progress_return = [{'qualifier': 'message', 'value': 'in progress (iter {})'.format(_minimize_iter)},
+                                        {'qualifier': 'niter', 'value': _minimize_iter},
+                                        {'qualifier': 'success', 'value': False},
+                                        {'qualifier': 'fitted_uniqueids', 'value': params_uniqueids},
+                                        {'qualifier': 'fitted_twigs', 'value': params_twigs},
+                                        {'qualifier': 'fitted_values', 'value': xi},
+                                        {'qualifier': 'fitted_units', 'value': [u if isinstance(u, str) else u.to_string() for u in fitted_units]},
+                                        {'qualifier': 'adopt_parameters', 'value': params_twigs, 'choices': params_twigs},
+                                        {'qualifier': 'bounds', 'value': bounds}]
+
+                    _solution_ps = self._fill_solution(_solution_ps, [_progress_return], metawargs)
+
+                    if 'out_fname' in kwargs:
+                        fname = kwargs.get('out_fname') + '.progress'
+                    else:
+                        fname = '{}.progress.ps'.format(_solution)
+
+                    _solution_ps.save(fname, compact=True, sort_by_context=False)
+
                 # always return 0/False so this callback doesn't cause early stopping
                 return 0
 
@@ -2664,10 +2692,10 @@ class Differential_EvolutionBackend(BaseSolverBackend):
                         'kind': b.get_solver(solver=solver, **_skip_filter_checks).kind,
                         'solution': _solution}
 
+            global _minimize_iter
+            _minimize_iter = 0
             global _use_progressbar
             if kwargs.get('progressbar', False):
-                global _minimize_iter
-                _minimize_iter = 0
                 global _minimize_pbar
                 _minimize_pbar = _tqdm(total=kwargs.get('maxiter'))
                 _minimize_pbar.update(1)  # start at 1 instead of 0
@@ -2677,13 +2705,11 @@ class Differential_EvolutionBackend(BaseSolverBackend):
 
             global _progress_every_niters
             _progress_every_niters = kwargs.get('progress_every_niters', 0)
-            if _progress_every_niters > 0:
-                raise NotImplementedError('Saving progress for a DE optimizer is not supported yet.')
 
             res = optimize.differential_evolution(_lnprobability_negative, bounds,
                                     args=args,
                                     workers=pool.map, updating='deferred',
-                                    callback=_progress if _use_progressbar else None,
+                                    callback=_progress if (_use_progressbar or _progress_every_niters > 0) else None,
                                     **options)
 
         else:
