@@ -317,11 +317,14 @@ class Spot(ComponentFeature):
 
 
 class GeometricPulsation(ComponentFeature):
+    def requires_remeshing(self):
+        return True
+
     @classmethod
     def create_feature_parameters(cls, feature, **kwargs):
         params = []
         params += [FloatParameter(qualifier='freq', value=kwargs.get('freq', 1.0), default_unit=u.d**-1, limits=(0, None), description='Pulsation frequency')]
-        params += [FloatParameter(qualifier='radamp', value=kwargs.get('radamp', 0.0), default_unit=u.dimensionless_unscaled, description='Radial amplitude of the pulsation')]
+        params += [FloatParameter(qualifier='radamp', value=kwargs.get('radamp', 0.1), default_unit=u.dimensionless_unscaled, description='Radial amplitude of the pulsation')]
         params += [FloatParameter(qualifier='phase', value=kwargs.get('phase', 0.0), default_unit=u.dimensionless_unscaled, description='Phase of pulsations at time t0@system')]
         params += [IntParameter(qualifier='l', value=kwargs.get('l', 0), limits=(0, None), description='Spherical harmonic degree l')]
         params += [IntParameter(qualifier='m', value=kwargs.get('m', 0), description='Spherical harmonic order m')]
@@ -344,7 +347,8 @@ class GeometricPulsation(ComponentFeature):
         GM = c.G.to('solRad3 / (solMass d2)').value*b.get_value(qualifier='mass', component=feature_ps.component, context='component', unit=u.solMass, **_skip_filter_checks)
         R = b.get_value(qualifier='requiv', component=feature_ps.component, context='component', unit=u.solRad, **_skip_filter_checks)
 
-        # Cowling assumption
+        # Cowling assumption. Currently unused (radial-only model); note this
+        # is GM/(R^3 f^2), missing (2*pi)^2 vs. the standard GM/(R^3 omega^2).
         tanamp = GM/R**3/freq**2
 
         return dict(radamp=radamp, freq=freq, phase=phase, t0=t0, l=l, m=m, tanamp=tanamp)
@@ -362,20 +366,21 @@ class GeometricPulsation(ComponentFeature):
 
         l, m = self.kwargs['l'], self.kwargs['m']
         xi_r = self.kwargs['radamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_r(l, m, theta, phi, phase)
-        if l > 0:
-            xi_t = self.kwargs['tanamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_theta(l, m, theta, phi, phase)
-            xi_p = self.kwargs['tanamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_phi(l, m, theta, phi, phase)
-        else:
-            xi_t = np.zeros_like(theta)
-            xi_p = np.zeros_like(phi)
+
+        # Radial-only model: as_xi_theta/as_xi_phi default to k=0, Omega=0,
+        # for which every tangential term is identically zero, so 'tanamp'
+        # would only ever multiply zeros. Zeroed explicitly here; enabling the
+        # tangential term needs k (from GYRE) and an RV constraint on scale.
+        xi_t = np.zeros_like(theta)
+        xi_p = np.zeros_like(phi)
 
         new_r = r + xi_r.real
         new_theta = theta + xi_t.real
         new_phi = phi + xi_p.real
 
         new_coords = np.zeros(coords_for_computations.shape)
-        new_coords[:, 0] = new_r * np.sin(new_theta) * np.sin(new_phi)
-        new_coords[:, 1] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 0] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 1] = new_r * np.sin(new_theta) * np.sin(new_phi)
         new_coords[:, 2] = new_r * np.cos(new_theta)
 
         return new_coords
@@ -402,20 +407,22 @@ class GeometricPulsation(ComponentFeature):
 
         l, m = self.kwargs['l'], self.kwargs['m']
         xi_r = self.kwargs['radamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_r(l, m, theta, phi, phase)
-        if l > 0:
-            xi_t = self.kwargs['tanamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_theta(l, m, theta, phi, phase)
-            xi_p = self.kwargs['tanamp'] * np.sqrt(4.*np.pi) * asteroseismo.as_xi_phi(l, m, theta, phi, phase)
-        else:
-            xi_t = np.zeros_like(theta)
-            xi_p = np.zeros_like(phi)
+
+        # Radial-only model: as_xi_theta/as_xi_phi default to k=0, Omega=0,
+        # for which every tangential term is identically zero, so 'tanamp'
+        # would only ever multiply zeros. Zeroed explicitly here; enabling the
+        # tangential term needs k (from GYRE) and an RV constraint on scale.
+        xi_t = np.zeros_like(theta)
+        xi_p = np.zeros_like(phi)
 
         new_r = r + xi_r.real
         new_theta = theta + xi_t.real
         new_phi = phi + xi_p.real
 
         new_coords = np.zeros(coords_for_observations.shape)
-        new_coords[:, 0] = new_r * np.sin(new_theta) * np.sin(new_phi)
-        new_coords[:, 1] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 0] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 1] = new_r * np.sin(new_theta) * np.sin(new_phi)
         new_coords[:, 2] = new_r * np.cos(new_theta)
 
         return new_coords
+

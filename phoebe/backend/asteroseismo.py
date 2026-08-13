@@ -51,6 +51,17 @@ def as_Y(l, m, theta, phi):
     Plm = as_legendre(l, m, np.cos(theta))
     return factor*Plm*np.exp(1j*m*phi)
 
+def _inv_sin(theta, eps=1e-12):
+    """
+    1/sin(theta), with the value at the poles set to 0 instead of inf/nan.
+
+    The pole is a coordinate singularity of the spherical-harmonic basis, not
+    a physical one; without this a mesh vertex landing on a pole yields nan,
+    which then propagates into the coordinates.
+    """
+    s = np.sin(theta)
+    return np.where(np.abs(s) < eps, 0.0, 1.0/np.where(np.abs(s) < eps, 1.0, s))
+
 def as_norm_J(l, m):
     """
     @l: non-radial degree (the number of longitudinal and latitudinal node lines)
@@ -104,7 +115,7 @@ def as_dYdtheta(l, m, theta, phi):
     if abs(m) >= l:
         Y = 0.
     else:
-        factor = 1./np.sin(theta)
+        factor = _inv_sin(theta)
         term1 = l     * as_norm_J(l+1, m) * as_Y(l+1, m, theta, phi)
         term2 = (l+1) * as_norm_J(l,   m) * as_Y(l-1, m, theta, phi)
         Y = factor * (term1 - term2)
@@ -155,8 +166,8 @@ def as_xi_theta(l, m, theta, phi, wt, Omega=0, k=0):
     """
 
     term1 = k * as_dYdtheta(l, m, theta, phi) * np.exp(1j*wt)
-    term2 = as_norm_atlp1(l, m, Omega, k) / np.sin(theta) * as_dYdphi(l+1, m, theta, phi) * np.exp(1j*wt + np.pi/2)
-    term3 = as_norm_atlm1(l, m, Omega, k) / np.sin(theta) * as_dYdphi(l-1, m, theta, phi) * np.exp(1j*wt - np.pi/2)
+    term2 = as_norm_atlp1(l, m, Omega, k) * _inv_sin(theta) * as_dYdphi(l+1, m, theta, phi) * np.exp(1j*wt + np.pi/2)
+    term3 = as_norm_atlm1(l, m, Omega, k) * _inv_sin(theta) * as_dYdphi(l-1, m, theta, phi) * np.exp(1j*wt - np.pi/2)
     return term1 + term2 + term3
 
 def as_xi_phi(l, m, theta, phi, wt, Omega=0, k=0):
@@ -174,7 +185,7 @@ def as_xi_phi(l, m, theta, phi, wt, Omega=0, k=0):
         Zima W, A&A 455, 227–234 (2006), Appendix A
     """
 
-    term1 = k/np.sin(theta) * as_dYdphi(l, m, theta, phi) * np.exp(1j*wt)
+    term1 = k * _inv_sin(theta) * as_dYdphi(l, m, theta, phi) * np.exp(1j*wt)
     term2 = -as_norm_atlp1(l, m, Omega, k) * as_dYdtheta(l+1, m, theta, phi)*np.exp(1j*wt+np.pi/2)
     term3 = -as_norm_atlm1(l, m, Omega, k) * as_dYdtheta(l-1, m, theta, phi)*np.exp(1j*wt-np.pi/2)
     return term1 + term2 + term3
