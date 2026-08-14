@@ -150,6 +150,8 @@ class ComponentFeature(BaseFeature):
 
 
 class Spot(ComponentFeature):
+    allowed_component_kinds = ['star']
+
     @classmethod
     def create_feature_parameters(cls, feature, **kwargs):
         """
