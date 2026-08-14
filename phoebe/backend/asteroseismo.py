@@ -54,7 +54,6 @@ def as_Y(l, m, theta, phi):
 def _inv_sin(theta, eps=1e-12):
     """
     1/sin(theta), with the value at the poles set to 0 instead of inf/nan.
-
     The pole is a coordinate singularity of the spherical-harmonic basis, not
     a physical one; without this a mesh vertex landing on a pole yields nan,
     which then propagates into the coordinates.
