@@ -317,6 +317,9 @@ class Spot(ComponentFeature):
 
 
 class GeometricPulsation(ComponentFeature):
+    def requires_remeshing(self):
+        return True
+        
     @classmethod
     def create_feature_parameters(cls, feature, **kwargs):
         params = []
@@ -374,8 +377,8 @@ class GeometricPulsation(ComponentFeature):
         new_phi = phi + xi_p.real
 
         new_coords = np.zeros(coords_for_computations.shape)
-        new_coords[:, 0] = new_r * np.sin(new_theta) * np.sin(new_phi)
-        new_coords[:, 1] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 0] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 1] = new_r * np.sin(new_theta) * np.sin(new_phi)
         new_coords[:, 2] = new_r * np.cos(new_theta)
 
         return new_coords
@@ -414,8 +417,8 @@ class GeometricPulsation(ComponentFeature):
         new_phi = phi + xi_p.real
 
         new_coords = np.zeros(coords_for_observations.shape)
-        new_coords[:, 0] = new_r * np.sin(new_theta) * np.sin(new_phi)
-        new_coords[:, 1] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 0] = new_r * np.sin(new_theta) * np.cos(new_phi)
+        new_coords[:, 1] = new_r * np.sin(new_theta) * np.sin(new_phi)
         new_coords[:, 2] = new_r * np.cos(new_theta)
 
         return new_coords
