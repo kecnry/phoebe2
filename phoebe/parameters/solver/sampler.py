@@ -76,6 +76,11 @@ def emcee(**kwargs):
         from an existing emcee solution.  Chains will be appended to existing
         chains (so it is safe to overwrite the existing solution).  If 'None',
         will start a new run using `init_from`.
+    * `continue_from_iter` (int, optional, default=-1): index of the iteration
+        from which to continue, inclusive. Negative indices count from the end.
+        For older solutions without per-iteration acceptance records, acceptance
+        counts for a truncated history are estimated from the stored fraction.
+        Failed samples are not truncated.
     * `init_from` (list, optional, default=[]): only applicable if `continue_from`
         is 'None'.  distribution(s) to initialize samples from (all unconstrained
         parameters with attached distributions will be sampled/fitted, constrained
@@ -133,7 +138,7 @@ def emcee(**kwargs):
     params += [ChoiceParameter(qualifier='compute', value=kwargs.get('compute', 'None'), choices=['None'], description='compute options to use for forward model')]
 
     params += [ChoiceParameter(qualifier='continue_from', value=kwargs.get('continue_from', 'None'), choices=['None'], description='continue the MCMC run from an existing emcee solution.  Chains will be appended to existing chains (so it is safe to overwrite the existing solution).  If None, will start a new run using init_from.')]
-    params += [IntParameter(visible_if='continue_from:!None', qualifier='continue_from_iter', value=kwargs.get('continue_from_iter', -1), advanced=True, limits=(None, None), default_unit=u.dimensionless_unscaled, description='Iteration from which to continue the previous run (supports negative indexing: -1 will continue from the last iteration.  Does not affect failed_samples or acceptance_fractions)')]
+    params += [IntParameter(visible_if='continue_from:!None', qualifier='continue_from_iter', value=kwargs.get('continue_from_iter', -1), advanced=True, limits=(None, None), default_unit=u.dimensionless_unscaled, description='Iteration from which to continue, inclusive (supports negative indexing: -1 continues from the last iteration). Failed samples are not truncated. Acceptance counts for truncated legacy solutions without per-iteration records are estimated.')]
     params += [SelectParameter(visible_if='continue_from:None', qualifier='init_from', value=kwargs.get('init_from', []), choices=[], description='distribution(s) to initialize samples from (all unconstrained parameters with attached distributions will be sampled/fitted, constrained parameters will be ignored, covariances will be respected)')]
     params += [ChoiceParameter(visible_if='continue_from:None,init_from:<notempty>', qualifier='init_from_combine', value=kwargs.get('init_from_combine', 'first'), choices=['first', 'and', 'or'], advanced=True, description='Method to use to combine multiple distributions from init_from for the same parameter.  first: ignore duplicate entries and take the first in the init_from parameter. and: combine duplicate entries via AND logic, dropping covariances.  or: combine duplicate entries via OR logic, dropping covariances.')]
     params += [SelectParameter(visible_if='continue_from:None,init_from:<notempty>', qualifier='init_from_requires', value=kwargs.get('init_from_requires', ['limits', 'priors']), choices=['limits', 'checks', 'compute', 'priors'], advanced=True, description='Requirements to apply to the initializing distribution.  Including all checks prevents walkers from initializing at lnprob=-inf, but does add overhead.  limits: apply parameter limits (cheap if init_from are univariates, otherwise requires testing samples).  priors: apply prior limits (directly if priors are uniform, otherwise from ppf at 1e-6 limits.  Cheap if init_from are univariates and priors do not contain OR logic, otherwise requires testing samples).  checks: test each sample to make sure it passes compute checks (and therefore includes limits).  compute: test each sample to make sure it successfully runs a forward model (and therefore includes checks and limits).')]

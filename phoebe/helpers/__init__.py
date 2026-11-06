@@ -349,7 +349,8 @@ def get_emcee_object(samples, lnprobabilities, acceptance_fractions):
     ------------
     * `samples` (array): samples with shape (niters, nwalkers, nparams)
     * `lnprobabilities` (array): log-probablities with shape (niters, nwalkers)
-    * `acceptance_fractions` (array): acceptance fractions with shape (nwalkers)
+    * `acceptance_fractions` (array): acceptance fractions over the supplied
+        samples, with shape (nwalkers)
 
     Returns
     -----------
@@ -362,7 +363,7 @@ def get_emcee_object(samples, lnprobabilities, acceptance_fractions):
     backend.nwalkers = samples.shape[1]
     backend.ndim = samples.shape[2]
     backend.iteration = samples.shape[0]
-    backend.accepted = acceptance_fractions
+    backend.accepted = np.asarray(acceptance_fractions, dtype=float) * backend.iteration
     backend.chain = samples
     backend.log_prob = lnprobabilities
     backend.initialized = True

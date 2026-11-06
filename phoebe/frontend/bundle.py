@@ -4854,9 +4854,9 @@ class Bundle(ParameterSet):
                 else:
                     continue_from_iter = solver_ps.get_value(qualifier='continue_from_iter', continue_from_iter=kwargs.get('continue_from_iter', None), default=-1, **_skip_filter_checks)
                     niters = self.get_value(qualifier='niters', solution=continue_from, **_skip_filter_checks)
-                    if abs(continue_from_iter) > niters:
+                    if not -niters <= continue_from_iter < niters:
                         report.add_item(self,
-                                        "abs(continue_from_iter) must not be larger than completed niters@{}={}".format(continue_from, niters),
+                                        "continue_from_iter must index a completed iteration in niters@{}={}".format(continue_from, niters),
                                         [solver_ps.get_parameter(qualifier='continue_from_iter', **_skip_filter_checks),
                                          solver_ps.get_parameter(qualifier='continue_from', **_skip_filter_checks),
                                         ]+addl_parameters,

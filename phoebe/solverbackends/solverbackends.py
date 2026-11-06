@@ -1352,6 +1352,38 @@ class EbaiBackend(BaseSolverBackend):
                 ]]
 
 
+def _emcee_continued_acceptance(samples, acceptance_fractions, accepteds, stop):
+    niterations, nwalkers = samples.shape[:2]
+    acceptance_fractions = np.asarray(acceptance_fractions, dtype=float)
+    if acceptance_fractions.shape != (nwalkers,):
+        raise ValueError("emcee acceptance_fractions must have shape (nwalkers,)")
+
+    if accepteds is None:
+        accepteds = np.full((niterations, nwalkers), np.nan)
+    else:
+        accepteds = np.asarray(accepteds, dtype=float)
+        if accepteds.shape != (niterations, nwalkers):
+            raise ValueError("emcee accepteds must have shape (niters, nwalkers)")
+        if np.any(~(np.isnan(accepteds) | (accepteds == 0) | (accepteds == 1))):
+            raise ValueError("emcee accepteds must contain 0, 1, or NaN")
+
+    retained = accepteds[:stop]
+    unknown = np.isnan(accepteds)
+    if np.any(unknown):
+        logger.warning("emcee solution has legacy acceptance history; its stored acceptance fractions may be inaccurate if the solution was previously continued%s",
+                       "; counts for a truncated unknown history are estimated" if np.any(unknown[stop:]) else "")
+        known_counts = np.nansum(accepteds, axis=0)
+        unknown_counts = np.sum(unknown, axis=0)
+        retained_unknown = np.sum(unknown[:stop], axis=0)
+        legacy_counts = acceptance_fractions * niterations - known_counts
+        estimated = np.divide(legacy_counts * retained_unknown, unknown_counts,
+                              out=np.zeros(nwalkers), where=unknown_counts != 0)
+    else:
+        estimated = np.zeros(nwalkers)
+
+    return retained, np.nansum(retained, axis=0) + estimated
+
+
 class EmceeBackend(BaseSolverBackend):
     """
     See <phoebe.parameters.solver.sampler.emcee>.
@@ -1413,7 +1445,7 @@ class EmceeBackend(BaseSolverBackend):
             solution_params += [_parameters.DictParameter(qualifier='failed_samples', value={}, readonly=True, description='MCMC samples that returned lnprobability=-inf.  Dictionary keys are the messages with values being an array with shape (N, len(fitted_twigs))')]
         solution_params += [_parameters.ArrayParameter(qualifier='lnprobabilities', value=[], readonly=True, description='log probabilities with shape (niters, nwalkers)')]
 
-        # solution_params += [_parameters.ArrayParameter(qualifier='accepteds', value=[], description='whether each iteration was an accepted move with shape (niters)')]
+        solution_params += [_parameters.ArrayParameter(qualifier='accepteds', value=[], advanced=True, readonly=True, description='accepted moves with shape (niters, nwalkers); NaN denotes unavailable legacy history')]
         solution_params += [_parameters.ArrayParameter(qualifier='acceptance_fractions', value=[], readonly=True, description='fraction of proposed steps that were accepted with shape (nwalkers)')]
 
         solution_params += [_parameters.ArrayParameter(qualifier='autocorr_times', value=[], readonly=True, description='measured autocorrelation time with shape (len(fitted_twigs)) before applying burnin/thin.  To access with a custom burnin/thin, see phoebe.helpers.get_emcee_object_from_solution')]
@@ -1445,6 +1477,7 @@ class EmceeBackend(BaseSolverBackend):
                      {'qualifier': 'nwalkers', 'value': samples.shape[1]},
                      {'qualifier': 'samples', 'value': samples},
                      {'qualifier': 'lnprobabilities', 'value': lnprobabilities},
+                     {'qualifier': 'accepteds', 'value': np.asarray(accepteds)},
                      {'qualifier': 'acceptance_fractions', 'value': acceptance_fractions},
                      {'qualifier': 'autocorr_times', 'value': autocorr_times},
                      {'qualifier': 'burnin', 'value': burnin},
@@ -1590,6 +1623,7 @@ class EmceeBackend(BaseSolverBackend):
                 params_units = [dist.unit.to_string() for dist in dc.dists]
 
                 continued_failed_samples = {}
+                accepteds = []
                 start_iteration = 0
             else:
                 # ignore the value from init_from (hidden parameter)
@@ -1631,7 +1665,12 @@ class EmceeBackend(BaseSolverBackend):
                             wrap_central_values[uniqueid] = np.median(samples_this_param)
 
                 params_units = continue_from_ps.get_value(qualifier='fitted_units', **_skip_filter_checks)
-                continued_samples = continue_from_ps.get_value(qualifier='samples', **_skip_filter_checks)[:continue_from_iter, :, :]
+                previous_samples = continue_from_ps.get_value(qualifier='samples', **_skip_filter_checks)
+                nprevious = previous_samples.shape[0]
+                if not -nprevious <= continue_from_iter < nprevious:
+                    raise ValueError("continue_from_iter must index a completed emcee iteration")
+                stop = continue_from_iter % nprevious + 1
+                continued_samples = previous_samples[:stop, :, :]
                 expose_failed = 'failed_samples' in continue_from_ps.qualifiers
                 kwargs['expose_failed'] = expose_failed # needed for _get_packet_and_solution
                 if expose_failed:
@@ -1639,18 +1678,16 @@ class EmceeBackend(BaseSolverBackend):
                 else:
                     continued_failed_samples = {}
 
-                # continued_samples [iterations, walkers, parameter]
-                # continued_accepteds = continue_from_ps.get_value(qualifier='accepteds', **_skip_filter_checks)
-                # # continued_accepted [iterations, walkers]
                 continued_acceptance_fractions = continue_from_ps.get_value(qualifier='acceptance_fractions', **_skip_filter_checks)
-                # continued_acceptance_fractions [iterations, walkers]
-                continued_lnprobabilities = continue_from_ps.get_value(qualifier='lnprobabilities', **_skip_filter_checks)[:continue_from_iter]
-                # continued_lnprobabilities [iterations, walkers]
+                previous_accepteds = continue_from_ps.get_value(qualifier='accepteds', **_skip_filter_checks) if 'accepteds' in continue_from_ps.qualifiers else None
+                continued_accepteds, continued_accepted_counts = _emcee_continued_acceptance(previous_samples, continued_acceptance_fractions, previous_accepteds, stop)
+                accepteds = list(continued_accepteds)
+                continued_lnprobabilities = continue_from_ps.get_value(qualifier='lnprobabilities', **_skip_filter_checks)[:stop]
 
                 # fake a backend object from the previous solution so that emcee
                 # can continue from where it left off and still compute
                 # autocorrelation times, etc.
-                esargs['backend'] = _get_emcee_object(continued_samples, continued_lnprobabilities, continued_acceptance_fractions)
+                esargs['backend'] = _get_emcee_object(continued_samples, continued_lnprobabilities, continued_accepted_counts / stop)
                 p0 = continued_samples[-1].T
                 # p0 [parameter, walkers]
                 nwalkers = int(p0.shape[-1])
@@ -1689,8 +1726,11 @@ class EmceeBackend(BaseSolverBackend):
 
 
             logger.debug("sampler.sample(p0, {})".format(sargs))
+            previous_accepted_counts = sampler.backend.accepted.copy()
             for sample in sampler.sample(p0.T, **sargs):
                 # TODO: parameters and options for checking convergence
+                accepteds.append(np.rint(sampler.backend.accepted - previous_accepted_counts))
+                previous_accepted_counts = sampler.backend.accepted.copy()
 
                 # check for kill signal
                 if kwargs.get('out_fname', False) and os.path.isfile(kwargs.get('out_fname')+'.kill'):
@@ -1709,7 +1749,6 @@ class EmceeBackend(BaseSolverBackend):
                 if (progress_every_niters > 0 and (sampler.iteration ==0 or (sampler.iteration - start_iteration) % progress_every_niters == 0)) or sampler.iteration - start_iteration == niters:
                     samples = sampler.backend.get_chain()
                     lnprobabilities = sampler.backend.get_log_prob()
-                    # accepteds = sampler.backend.accepted
                     acceptance_fractions = sampler.backend.accepted / float(sampler.iteration)
                     autocorr_times = sampler.backend.get_autocorr_time(quiet=True)
                     if np.any(~np.isnan(autocorr_times)):
